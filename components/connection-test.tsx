@@ -1,325 +1,306 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { testConnection, getConfigurationStatus, getDemoData } from "@/lib/supabase"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, XCircle, Loader2, AlertTriangle, ExternalLink, Copy, Eye, EyeOff } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Loader2, CheckCircle, XCircle, AlertCircle, RefreshCw, Database, Key, Globe, Play } from "lucide-react"
+import { testConnection, getConfigurationStatus, createTables } from "@/lib/supabase"
+
+interface ConnectionResult {
+  success: boolean
+  error?: string
+  errorType?: string
+  originalError?: string
+  message?: string
+  count?: any
+}
 
 export function ConnectionTest() {
-  const [connectionStatus, setConnectionStatus] = useState<{
-    success: boolean
-    error?: string
-    errorType?: string
-    originalError?: string
-    count?: number
-    message?: string
-  } | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [result, setResult] = useState<ConnectionResult | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [creatingTables, setCreatingTables] = useState(false)
   const [configStatus, setConfigStatus] = useState<any>(null)
-  const [showDemoMode, setShowDemoMode] = useState(false)
-  const [showEnvDetails, setShowEnvDetails] = useState(false)
 
-  const handleTestConnection = async () => {
-    setIsLoading(true)
-    setShowDemoMode(false)
-    const result = await testConnection()
-    const config = getConfigurationStatus()
-    setConnectionStatus(result)
-    setConfigStatus(config)
-    setIsLoading(false)
-  }
-
-  const handleDemoMode = () => {
-    const demoData = getDemoData()
-    setConnectionStatus({
-      success: true,
-      message: demoData.message,
-      count: demoData.users.length,
-    })
-    setShowDemoMode(true)
-  }
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
-  }
-
+  // Get configuration status on component mount
   useEffect(() => {
-    // Test connection on component mount
-    handleTestConnection()
+    setConfigStatus(getConfigurationStatus())
   }, [])
 
-  const getErrorSolution = (errorType?: string) => {
+  const handleTest = async () => {
+    setLoading(true)
+    setResult(null)
+
+    try {
+      const testResult = await testConnection()
+      setResult(testResult)
+    } catch (error: any) {
+      setResult({
+        success: false,
+        error: `Unexpected error: ${error.message}`,
+        errorType: "unexpected_error",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreateTables = async () => {
+    setCreatingTables(true)
+    try {
+      const createResult = await createTables()
+      if (createResult.success) {
+        setResult({
+          success: true,
+          message: "Tables created successfully! Testing connection again...",
+        })
+        // Test connection again after creating tables
+        setTimeout(() => {
+          handleTest()
+        }, 1000)
+      } else {
+        setResult({
+          success: false,
+          error: createResult.error || "Failed to create tables",
+          errorType: "table_creation_failed",
+        })
+      }
+    } catch (error: any) {
+      setResult({
+        success: false,
+        error: `Failed to create tables: ${error.message}`,
+        errorType: "table_creation_error",
+      })
+    } finally {
+      setCreatingTables(false)
+    }
+  }
+
+  // Auto-test on component mount if configured
+  useEffect(() => {
+    if (configStatus?.isConfigured) {
+      handleTest()
+    }
+  }, [configStatus])
+
+  const getStatusIcon = (success: boolean) => {
+    if (success) {
+      return <CheckCircle className="h-5 w-5 text-green-600" />
+    }
+    return <XCircle className="h-5 w-5 text-red-600" />
+  }
+
+  const getErrorTypeColor = (errorType: string) => {
     switch (errorType) {
       case "missing_url":
       case "missing_key":
-        return "Add the missing environment variables to your .env.local file"
+        return "destructive"
       case "placeholder_url":
       case "placeholder_key":
-        return "Replace placeholder values with your actual Supabase credentials"
+        return "secondary"
       case "invalid_url":
-        return "Use the correct Supabase URL format: https://your-project-id.supabase.co"
       case "invalid_key":
-        return "Use your actual Supabase anon key (it should be a long JWT token)"
-      case "network_error":
-      case "fetch_error":
-        return "Check your Supabase project URL and ensure your project exists and is active"
-      case "auth_error":
-        return "Verify your Supabase anon key is correct"
+        return "destructive"
       case "table_missing":
-        return "Run the SQL scripts to create the database tables"
-      case "timeout_error":
-        return "Check your internet connection and Supabase project status"
+        return "default"
       default:
-        return "Follow the setup instructions below"
+        return "destructive"
     }
   }
 
   return (
     <div className="space-y-6">
-      <Card className="w-full max-w-2xl mx-auto">
+      {/* Configuration Status */}
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            Supabase Connection Test
-            {connectionStatus?.success && <CheckCircle className="h-5 w-5 text-green-500" />}
-            {connectionStatus?.success === false && <XCircle className="h-5 w-5 text-red-500" />}
+            <Database className="h-5 w-5" />
+            Configuration Status
           </CardTitle>
-          <CardDescription>Verify your Supabase database connection</CardDescription>
+          <CardDescription>Current Supabase environment variables status</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {isLoading && (
-            <div className="flex items-center gap-2 text-blue-600">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Testing connection...
-            </div>
-          )}
-
-          {connectionStatus && !isLoading && (
-            <div className="space-y-4">
-              {connectionStatus.success ? (
-                <Alert className="border-green-200 bg-green-50">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <AlertDescription className="text-green-800">
-                    ✅ {connectionStatus.message || "Connection successful!"}
-                    {showDemoMode && (
-                      <div className="mt-2 text-sm">
-                        <strong>Demo Mode:</strong> This is sample data. Configure Supabase to see real data.
-                      </div>
-                    )}
-                  </AlertDescription>
-                </Alert>
-              ) : (
-                <Alert className="border-red-200 bg-red-50">
-                  <XCircle className="h-4 w-4 text-red-600" />
-                  <AlertDescription className="text-red-800">
-                    <strong>Connection failed:</strong>
-                    <div className="mt-2 whitespace-pre-line">{connectionStatus.error}</div>
-                    {connectionStatus.errorType && (
-                      <div className="mt-3 p-2 bg-red-100 rounded text-sm">
-                        <strong>Solution:</strong> {getErrorSolution(connectionStatus.errorType)}
-                      </div>
-                    )}
-                    {connectionStatus.originalError && (
-                      <details className="mt-2">
-                        <summary className="cursor-pointer text-sm font-medium">Technical Details</summary>
-                        <div className="mt-1 text-xs font-mono bg-red-100 p-2 rounded">
-                          {connectionStatus.originalError}
-                        </div>
-                      </details>
-                    )}
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
-          )}
-
           {configStatus && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-arkus-navy">Configuration Status:</h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowEnvDetails(!showEnvDetails)}
-                  className="text-xs"
-                >
-                  {showEnvDetails ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                  {showEnvDetails ? "Hide" : "Show"} Details
-                </Button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Globe className="h-4 w-4" />
+                  <span className="text-sm font-medium">Supabase URL</span>
+                  <Badge variant={configStatus.hasUrl && configStatus.isValidUrl ? "default" : "destructive"}>
+                    {configStatus.hasUrl && configStatus.isValidUrl ? "Valid" : "Invalid"}
+                  </Badge>
+                </div>
+                <p className="text-xs text-gray-600 ml-6">{configStatus.urlValue}</p>
               </div>
-              <div className="grid grid-cols-1 gap-2 text-sm">
-                <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                  <span>Supabase URL:</span>
-                  <div className="flex items-center gap-2">
-                    {configStatus.isValidUrl ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-red-500" />
-                    )}
-                    <span className="text-xs text-gray-600">
-                      {configStatus.urlPlaceholder ? "Using placeholder" : configStatus.urlValue}
-                    </span>
-                    {showEnvDetails && configStatus.hasUrl && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => copyToClipboard(configStatus.urlValue)}
-                        className="h-6 w-6 p-0"
-                      >
-                        <Copy className="h-3 w-3" />
-                      </Button>
-                    )}
-                  </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Key className="h-4 w-4" />
+                  <span className="text-sm font-medium">Anon Key</span>
+                  <Badge variant={configStatus.hasKey && configStatus.isValidKey ? "default" : "destructive"}>
+                    {configStatus.hasKey && configStatus.isValidKey ? "Valid" : "Invalid"}
+                  </Badge>
                 </div>
-                <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                  <span>Anon Key:</span>
-                  <div className="flex items-center gap-2">
-                    {configStatus.isValidKey ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-red-500" />
-                    )}
-                    <span className="text-xs text-gray-600">
-                      {configStatus.keyPlaceholder ? "Using placeholder" : configStatus.keyValue}
-                    </span>
-                  </div>
-                </div>
+                <p className="text-xs text-gray-600 ml-6">{configStatus.keyValue}</p>
               </div>
             </div>
           )}
 
+          {configStatus && !configStatus.isConfigured && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Supabase is not properly configured. Please check your environment variables in the v0 integrations
+                panel or update your .env.local file.
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Connection Test */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <RefreshCw className="h-5 w-5" />
+            Database Connection Test
+          </CardTitle>
+          <CardDescription>Test the connection to your Supabase database</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <div className="flex gap-2">
-            <Button onClick={handleTestConnection} disabled={isLoading} className="flex-1">
-              {isLoading ? (
+            <Button onClick={handleTest} disabled={loading} className="flex-1">
+              {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Testing...
+                  Testing Connection...
                 </>
               ) : (
-                "Test Connection Again"
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Test Connection
+                </>
               )}
             </Button>
-            <Button
-              onClick={handleDemoMode}
-              variant="outline"
-              className="border-arkus-red text-arkus-red hover:bg-arkus-red hover:text-white bg-transparent"
-            >
-              Try Demo Mode
-            </Button>
+
+            {result && result.errorType === "table_missing" && (
+              <Button
+                onClick={handleCreateTables}
+                disabled={creatingTables}
+                variant="outline"
+                className="border-green-500 text-green-600 hover:bg-green-50 bg-transparent"
+              >
+                {creatingTables ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating Tables...
+                  </>
+                ) : (
+                  <>
+                    <Play className="mr-2 h-4 w-4" />
+                    Create Tables
+                  </>
+                )}
+              </Button>
+            )}
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Setup Instructions */}
-      <Card className="w-full max-w-2xl mx-auto">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-yellow-500" />
-            Setup Instructions
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-3 text-sm">
-            <div className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-6 h-6 bg-arkus-red text-white rounded-full flex items-center justify-center text-xs font-bold">
-                1
-              </span>
-              <div>
-                <p className="font-medium">Create a Supabase account</p>
-                <p className="text-gray-600">
-                  Go to{" "}
-                  <a
-                    href="https://supabase.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-arkus-red hover:underline inline-flex items-center gap-1"
-                  >
-                    supabase.com <ExternalLink className="h-3 w-3" />
-                  </a>{" "}
-                  and create a new account
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-6 h-6 bg-arkus-red text-white rounded-full flex items-center justify-center text-xs font-bold">
-                2
-              </span>
-              <div>
-                <p className="font-medium">Create a new project</p>
-                <p className="text-gray-600">Click "New Project" and follow the setup wizard</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-6 h-6 bg-arkus-red text-white rounded-full flex items-center justify-center text-xs font-bold">
-                3
-              </span>
-              <div>
-                <p className="font-medium">Get your API credentials</p>
-                <p className="text-gray-600">Go to Settings → API in your project dashboard</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-6 h-6 bg-arkus-red text-white rounded-full flex items-center justify-center text-xs font-bold">
-                4
-              </span>
-              <div>
-                <p className="font-medium">Update your .env.local file</p>
-                <p className="text-gray-600">Replace the placeholder values with your actual credentials:</p>
-                <div className="mt-2 p-2 bg-gray-100 rounded text-xs font-mono">
-                  <div>NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co</div>
-                  <div>NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6...</div>
+          {result && (
+            <Alert className={result.success ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
+              <div className="flex items-start gap-3">
+                {getStatusIcon(result.success)}
+                <div className="flex-1">
+                  <AlertDescription className={result.success ? "text-green-800" : "text-red-800"}>
+                    {result.success ? (
+                      <div>
+                        <strong>✅ Connection Successful!</strong>
+                        <p className="mt-1">{result.message}</p>
+                        {result.count !== undefined && <p className="text-sm mt-2">Database is ready to use.</p>}
+                      </div>
+                    ) : (
+                      <div>
+                        <strong>❌ Connection Failed</strong>
+                        <p className="mt-1 whitespace-pre-line">{result.error}</p>
+                        {result.errorType && (
+                          <Badge variant={getErrorTypeColor(result.errorType)} className="mt-2">
+                            {result.errorType.replace("_", " ")}
+                          </Badge>
+                        )}
+                        {result.originalError && (
+                          <details className="mt-2">
+                            <summary className="text-sm cursor-pointer">Technical Details</summary>
+                            <p className="text-xs mt-1 font-mono bg-gray-100 p-2 rounded">{result.originalError}</p>
+                          </details>
+                        )}
+                      </div>
+                    )}
+                  </AlertDescription>
                 </div>
               </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-6 h-6 bg-arkus-red text-white rounded-full flex items-center justify-center text-xs font-bold">
-                5
-              </span>
-              <div>
-                <p className="font-medium">Run the SQL scripts</p>
-                <p className="text-gray-600">
-                  Execute the SQL in <code className="bg-gray-100 px-1 rounded">supabase-tables.sql</code> and{" "}
-                  <code className="bg-gray-100 px-1 rounded">supabase-seed-data.sql</code> in your Supabase SQL editor
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-6 h-6 bg-arkus-red text-white rounded-full flex items-center justify-center text-xs font-bold">
-                6
-              </span>
-              <div>
-                <p className="font-medium">Restart your development server</p>
-                <p className="text-gray-600">
-                  Stop your dev server (Ctrl+C) and run <code className="bg-gray-100 px-1 rounded">npm run dev</code>{" "}
-                  again
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <Alert className="border-blue-200 bg-blue-50">
-            <AlertTriangle className="h-4 w-4 text-blue-600" />
-            <AlertDescription className="text-blue-800">
-              <strong>Need help?</strong> Check the{" "}
-              <a
-                href="https://supabase.com/docs"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:underline inline-flex items-center gap-1"
-              >
-                Supabase documentation <ExternalLink className="h-3 w-3" />
-              </a>{" "}
-              or try the Demo Mode button above to see how the app works with sample data.
-            </AlertDescription>
-          </Alert>
+            </Alert>
+          )}
         </CardContent>
       </Card>
+
+      {/* Next Steps */}
+      {result && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Next Steps</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {result.success ? (
+              <div className="space-y-2">
+                <p className="text-green-800">🎉 Great! Your database connection is working.</p>
+                <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+                  <li>
+                    Go back to the{" "}
+                    <a href="/" className="text-blue-600 hover:underline">
+                      main dashboard
+                    </a>{" "}
+                    to see your data
+                  </li>
+                  <li>
+                    Check the{" "}
+                    <a href="/analytics" className="text-blue-600 hover:underline">
+                      analytics page
+                    </a>{" "}
+                    for insights
+                  </li>
+                  <li>
+                    View individual{" "}
+                    <a href="/profile" className="text-blue-600 hover:underline">
+                      user profiles
+                    </a>
+                  </li>
+                </ul>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-red-800">🔧 Here's how to fix the connection:</p>
+                <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+                  {result.errorType === "missing_url" || result.errorType === "missing_key" ? (
+                    <li>Add the Supabase integration in your v0 project settings</li>
+                  ) : result.errorType === "table_missing" ? (
+                    <>
+                      <li>Your connection works, but tables are missing</li>
+                      <li>Click the "Create Tables" button above to automatically create them</li>
+                      <li>Or run the SQL scripts manually in your Supabase dashboard</li>
+                    </>
+                  ) : (
+                    <>
+                      <li>Check your Supabase project URL and anon key</li>
+                      <li>Verify your project exists and is active</li>
+                      <li>Check your internet connection</li>
+                    </>
+                  )}
+                </ul>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
