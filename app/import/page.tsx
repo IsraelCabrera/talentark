@@ -3,592 +3,651 @@
 import type React from "react"
 
 import { useState, useRef } from "react"
-import { ArrowLeft, Upload, Download, FileSpreadsheet, Users, AlertTriangle, CheckCircle, X } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { useAuth } from "@/components/auth/auth-provider"
+import ProtectedRoute from "@/components/auth/protected-route"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Progress } from "@/components/ui/progress"
+import { Separator } from "@/components/ui/separator"
+import { supabase } from "@/lib/supabase-client"
+import {
+  Upload,
+  Download,
+  FileSpreadsheet,
+  Users,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  ArrowLeft,
+  Loader2,
+  FileText,
+  Info,
+} from "lucide-react"
 import Link from "next/link"
-import Image from "next/image"
+import * as XLSX from "xlsx"
 
-// Mock data for import history
-const importHistory = [
-  {
-    id: 1,
-    fileName: "employees_batch_1.xlsx",
-    importedBy: "Carlos Ruiz",
-    importDate: "2024-01-15T10:30:00Z",
-    recordsProcessed: 25,
-    recordsSuccess: 23,
-    recordsErrors: 2,
-    status: "completed",
-  },
-  {
-    id: 2,
-    fileName: "new_hires_q1.csv",
-    importedBy: "Sofia Gonzalez",
-    importDate: "2024-01-10T14:15:00Z",
-    recordsProcessed: 12,
-    recordsSuccess: 12,
-    recordsErrors: 0,
-    status: "completed",
-  },
-  {
-    id: 3,
-    fileName: "contractors_update.xlsx",
-    importedBy: "Maria HR",
-    importDate: "2024-01-08T09:45:00Z",
-    recordsProcessed: 8,
-    recordsSuccess: 6,
-    recordsErrors: 2,
-    status: "completed_with_errors",
-  },
-]
+interface ImportResult {
+  success: number
+  errors: Array<{ row: number; error: string; data?: any }>
+  warnings: Array<{ row: number; warning: string; data?: any }>
+}
 
-interface ImportPreviewData {
+interface UserData {
   name: string
   email: string
   position: string
   location: string
-  english_level: string
-  status: string
-  level: string
-  technologies: string
-  skills: string
-  certifications: string
-  education: string
-  languages: string
-  errors: string[]
+  phone?: string
+  department?: string
+  hire_date?: string
+  employee_score?: number
+  company_score?: number
 }
 
-export default function ImportPage() {
-  const [dragActive, setDragActive] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [importProgress, setImportProgress] = useState(0)
-  const [isImporting, setIsImporting] = useState(false)
-  const [previewData, setPreviewData] = useState<ImportPreviewData[]>([])
+function ImportPage() {
+  const { user } = useAuth()
+  const [file, setFile] = useState<File | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [result, setResult] = useState<ImportResult | null>(null)
+  const [previewData, setPreviewData] = useState<UserData[]>([])
   const [showPreview, setShowPreview] = useState(false)
-  const [importResults, setImportResults] = useState<{
-    success: number
-    errors: number
-    total: number
-  } | null>(null)
-
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true)
-    } else if (e.type === "dragleave") {
-      setDragActive(false)
-    }
-  }
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0]
+    if (!selectedFile) return
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragActive(false)
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileSelect(e.dataTransfer.files[0])
-    }
-  }
-
-  const handleFileSelect = (file: File) => {
-    const allowedTypes = [
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "application/vnd.ms-excel",
-      "text/csv",
-    ]
-
-    if (!allowedTypes.includes(file.type)) {
-      alert("Please select a valid Excel (.xlsx) or CSV file")
-      return
-    }
-
-    setSelectedFile(file)
-    processFilePreview(file)
-  }
-
-  const processFilePreview = async (file: File) => {
-    // Mock file processing - in a real app, this would parse the actual file
-    const mockPreviewData: ImportPreviewData[] = [
-      {
-        name: "John Doe",
-        email: "john.doe@arkus.com",
-        position: "Frontend Developer",
-        location: "Tijuana, MX",
-        english_level: "Advanced",
-        status: "available",
-        level: "T2",
-        technologies: "React, JavaScript, CSS",
-        skills: "UI Development, Testing",
-        certifications: "React Professional",
-        education: "Bachelor of Computer Science",
-        languages: "Spanish (Native), English (Advanced)",
-        errors: [],
-      },
-      {
-        name: "Jane Smith",
-        email: "jane.smith@arkus.com",
-        position: "Backend Developer",
-        location: "Guadalajara, MX",
-        english_level: "Fluent",
-        status: "assigned",
-        level: "T3",
-        technologies: "Node.js, PostgreSQL, Docker",
-        skills: "API Development, Database Design",
-        certifications: "AWS Solutions Architect",
-        education: "Master of Software Engineering",
-        languages: "Spanish (Native), English (Fluent)",
-        errors: [],
-      },
-      {
-        name: "Invalid User",
-        email: "invalid-email",
-        position: "",
-        location: "Unknown Location",
-        english_level: "Invalid Level",
-        status: "unknown",
-        level: "T5",
-        technologies: "",
-        skills: "",
-        certifications: "",
-        education: "",
-        languages: "",
-        errors: [
-          "Invalid email format",
-          "Position is required",
-          "Invalid English level",
-          "Invalid status",
-          "Invalid level (must be T1-T4)",
-        ],
-      },
-    ]
-
-    setPreviewData(mockPreviewData)
-    setShowPreview(true)
-  }
-
-  const handleImport = async () => {
-    if (!selectedFile || !previewData.length) return
-
-    setIsImporting(true)
-    setImportProgress(0)
-
-    // Simulate import progress
-    const interval = setInterval(() => {
-      setImportProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval)
-          setIsImporting(false)
-
-          // Mock import results
-          const validRecords = previewData.filter((record) => record.errors.length === 0)
-          const errorRecords = previewData.filter((record) => record.errors.length > 0)
-
-          setImportResults({
-            success: validRecords.length,
-            errors: errorRecords.length,
-            total: previewData.length,
-          })
-
-          return 100
-        }
-        return prev + 10
-      })
-    }, 200)
-  }
-
-  const downloadTemplate = () => {
-    // In a real app, this would generate and download an actual Excel file
-    const templateData = `Name,Email,Position,Location,English Level,Status,Level,Technologies,Skills,Certifications,Education,Languages
-John Doe,john.doe@arkus.com,Frontend Developer,Tijuana MX,Advanced,available,T2,"React, JavaScript, CSS","UI Development, Testing",React Professional,Bachelor of Computer Science,"Spanish (Native), English (Advanced)"
-Jane Smith,jane.smith@arkus.com,Backend Developer,Guadalajara MX,Fluent,assigned,T3,"Node.js, PostgreSQL, Docker","API Development, Database Design",AWS Solutions Architect,Master of Software Engineering,"Spanish (Native), English (Fluent)"`
-
-    const blob = new Blob([templateData], { type: "text/csv" })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "talentark_import_template.csv"
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    window.URL.revokeObjectURL(url)
-  }
-
-  const resetImport = () => {
-    setSelectedFile(null)
-    setPreviewData([])
+    setFile(selectedFile)
+    setResult(null)
     setShowPreview(false)
-    setImportResults(null)
-    setImportProgress(0)
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ""
+
+    // Preview the file
+    try {
+      const data = await readExcelFile(selectedFile)
+      setPreviewData(data.slice(0, 5)) // Show first 5 rows
+      setShowPreview(true)
+    } catch (error) {
+      console.error("Error reading file:", error)
     }
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
+  const readExcelFile = (file: File): Promise<UserData[]> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer)
+          const workbook = XLSX.read(data, { type: "array" })
+          const sheetName = workbook.SheetNames[0]
+          const worksheet = workbook.Sheets[sheetName]
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][]
+
+          if (jsonData.length < 2) {
+            reject(new Error("File must contain at least a header row and one data row"))
+            return
+          }
+
+          const headers = jsonData[0].map((h: string) => h?.toLowerCase().trim())
+          const users: UserData[] = []
+
+          for (let i = 1; i < jsonData.length; i++) {
+            const row = jsonData[i]
+            if (!row || row.every((cell) => !cell)) continue // Skip empty rows
+
+            const user: UserData = {
+              name: "",
+              email: "",
+              position: "",
+              location: "",
+            }
+
+            headers.forEach((header: string, index: number) => {
+              const value = row[index]?.toString().trim()
+              if (!value) return
+
+              switch (header) {
+                case "name":
+                case "full name":
+                case "employee name":
+                  user.name = value
+                  break
+                case "email":
+                case "email address":
+                  user.email = value.toLowerCase()
+                  break
+                case "position":
+                case "job title":
+                case "title":
+                  user.position = value
+                  break
+                case "location":
+                case "office":
+                case "city":
+                  user.location = value
+                  break
+                case "phone":
+                case "phone number":
+                  user.phone = value
+                  break
+                case "department":
+                case "dept":
+                  user.department = value
+                  break
+                case "hire date":
+                case "start date":
+                  user.hire_date = value
+                  break
+                case "employee score":
+                case "score":
+                  user.employee_score = Number.parseInt(value) || 0
+                  break
+                case "company score":
+                case "rating":
+                  user.company_score = Number.parseInt(value) || 0
+                  break
+              }
+            })
+
+            users.push(user)
+          }
+
+          resolve(users)
+        } catch (error) {
+          reject(error)
+        }
+      }
+      reader.onerror = () => reject(new Error("Failed to read file"))
+      reader.readAsArrayBuffer(file)
     })
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "completed":
-        return <Badge className="bg-green-100 text-green-800">✅ Completed</Badge>
-      case "completed_with_errors":
-        return <Badge className="bg-yellow-100 text-yellow-800">⚠️ Completed with Errors</Badge>
-      case "failed":
-        return <Badge className="bg-red-100 text-red-800">❌ Failed</Badge>
-      default:
-        return <Badge variant="outline">Unknown</Badge>
+  const validateUserData = (user: UserData, rowIndex: number): string[] => {
+    const errors: string[] = []
+
+    if (!user.name) errors.push("Name is required")
+    if (!user.email) errors.push("Email is required")
+    if (!user.position) errors.push("Position is required")
+    if (!user.location) errors.push("Location is required")
+
+    if (user.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user.email)) {
+      errors.push("Invalid email format")
+    }
+
+    if (user.employee_score && (user.employee_score < 0 || user.employee_score > 100)) {
+      errors.push("Employee score must be between 0 and 100")
+    }
+
+    if (user.company_score && (user.company_score < 0 || user.company_score > 10)) {
+      errors.push("Company score must be between 0 and 10")
+    }
+
+    return errors
+  }
+
+  const handleImport = async () => {
+    if (!file || !supabase) return
+
+    setImporting(true)
+    setProgress(0)
+    setResult(null)
+
+    try {
+      const users = await readExcelFile(file)
+      const result: ImportResult = {
+        success: 0,
+        errors: [],
+        warnings: [],
+      }
+
+      for (let i = 0; i < users.length; i++) {
+        const user = users[i]
+        const rowNumber = i + 2 // +2 because Excel rows start at 1 and we skip header
+
+        // Validate data
+        const validationErrors = validateUserData(user, i)
+        if (validationErrors.length > 0) {
+          result.errors.push({
+            row: rowNumber,
+            error: validationErrors.join(", "),
+            data: user,
+          })
+          setProgress(((i + 1) / users.length) * 100)
+          continue
+        }
+
+        try {
+          // Check if user already exists
+          const { data: existingUser } = await supabase.from("users").select("id").eq("email", user.email).single()
+
+          if (existingUser) {
+            result.warnings.push({
+              row: rowNumber,
+              warning: "User with this email already exists, skipping",
+              data: user,
+            })
+            setProgress(((i + 1) / users.length) * 100)
+            continue
+          }
+
+          // Insert user
+          const { error: insertError } = await supabase.from("users").insert({
+            name: user.name,
+            email: user.email,
+            position: user.position,
+            location: user.location,
+            phone: user.phone,
+            department: user.department,
+            hire_date: user.hire_date,
+            employee_score: user.employee_score || 0,
+            company_score: user.company_score || 0,
+            role: "employee", // Default role
+          })
+
+          if (insertError) {
+            result.errors.push({
+              row: rowNumber,
+              error: insertError.message,
+              data: user,
+            })
+          } else {
+            result.success++
+          }
+        } catch (error: any) {
+          result.errors.push({
+            row: rowNumber,
+            error: error.message || "Unknown error occurred",
+            data: user,
+          })
+        }
+
+        setProgress(((i + 1) / users.length) * 100)
+      }
+
+      setResult(result)
+    } catch (error: any) {
+      console.error("Import error:", error)
+      setResult({
+        success: 0,
+        errors: [{ row: 0, error: error.message || "Failed to process file" }],
+        warnings: [],
+      })
+    } finally {
+      setImporting(false)
     }
   }
 
+  const downloadTemplate = () => {
+    const template = [
+      ["Name", "Email", "Position", "Location", "Phone", "Department", "Hire Date", "Employee Score", "Company Score"],
+      [
+        "John Doe",
+        "john.doe@company.com",
+        "Software Developer",
+        "Austin, TX",
+        "+1-555-0123",
+        "Engineering",
+        "2023-01-15",
+        "85",
+        "8",
+      ],
+      [
+        "Jane Smith",
+        "jane.smith@company.com",
+        "Product Manager",
+        "San Francisco, CA",
+        "+1-555-0124",
+        "Product",
+        "2022-11-20",
+        "92",
+        "9",
+      ],
+    ]
+
+    const ws = XLSX.utils.aoa_to_sheet(template)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Employee Template")
+    XLSX.writeFile(wb, "talentark_import_template.xlsx")
+  }
+
+  const getRoleDisplayName = (role: string) => {
+    const roleMap: Record<string, string> = {
+      super_user: "Super User",
+      hr: "Human Resources",
+      manager: "Manager",
+      collaborator: "Collaborator",
+    }
+    return roleMap[role] || role
+  }
+
+  const getRoleBadgeColor = (role: string) => {
+    const colorMap: Record<string, string> = {
+      super_user: "bg-purple-100 text-purple-800",
+      hr: "bg-blue-100 text-blue-800",
+      manager: "bg-green-100 text-green-800",
+      collaborator: "bg-gray-100 text-gray-800",
+    }
+    return colorMap[role] || "bg-gray-100 text-gray-800"
+  }
+
   return (
-    <div className="min-h-screen bg-arkus-gray">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-arkus-navy border-b border-gray-300">
+      <header className="bg-slate-900 border-b border-gray-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
-              <Image src="/images/arkus-logo.png" alt="Arkus Logo" width={40} height={40} className="mr-3" />
+              <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center mr-3">
+                <span className="text-white font-bold text-lg">T</span>
+              </div>
               <div>
                 <h1 className="text-2xl font-bold text-white">Import Employees</h1>
-                <p className="text-sm text-gray-300">Bulk import employees from Excel or CSV files</p>
+                <p className="text-sm text-gray-300">Upload employee data from Excel files</p>
               </div>
             </div>
-            <Link href="/">
-              <Button
-                variant="outline"
-                className="border-white text-white hover:bg-white hover:text-arkus-navy bg-transparent"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Directory
-              </Button>
-            </Link>
+            <div className="flex items-center space-x-4">
+              {user && (
+                <div className="text-right">
+                  <p className="text-white font-medium">{user.name}</p>
+                  <Badge className={getRoleBadgeColor(user.role)}>{getRoleDisplayName(user.role)}</Badge>
+                </div>
+              )}
+              <Link href="/dashboard">
+                <Button
+                  variant="outline"
+                  className="border-white text-white hover:bg-white hover:text-slate-900 bg-transparent"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back to Dashboard
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Import Process */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Instructions */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy flex items-center">
-                  <FileSpreadsheet className="h-5 w-5 mr-2" />
-                  Import Instructions
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h3 className="font-semibold text-arkus-navy mb-2">Before You Start:</h3>
-                  <ul className="text-sm text-gray-700 space-y-1">
-                    <li>• Download the template file to ensure proper formatting</li>
-                    <li>• Supported formats: Excel (.xlsx) and CSV (.csv)</li>
-                    <li>• Maximum file size: 10MB</li>
-                    <li>• Maximum records per import: 1000</li>
-                  </ul>
-                </div>
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Instructions */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Info className="h-5 w-5 mr-2" />
+              Import Instructions
+            </CardTitle>
+            <CardDescription>Follow these steps to successfully import employee data</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h4 className="font-medium text-gray-900 mb-2">Step 1: Download Template</h4>
+                <p className="text-sm text-gray-600 mb-3">
+                  Download our Excel template with the correct column headers and sample data.
+                </p>
+                <Button onClick={downloadTemplate} variant="outline" size="sm">
+                  <Download className="h-4 w-4 mr-2" />
+                  Download Template
+                </Button>
+              </div>
+              <div>
+                <h4 className="font-medium text-gray-900 mb-2">Step 2: Prepare Your Data</h4>
+                <p className="text-sm text-gray-600 mb-3">
+                  Fill in the template with your employee data. Required fields: Name, Email, Position, Location.
+                </p>
+              </div>
+            </div>
+            <Separator />
+            <div>
+              <h4 className="font-medium text-gray-900 mb-2">Supported Columns</h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm text-gray-600">
+                <span>• Name (required)</span>
+                <span>• Email (required)</span>
+                <span>• Position (required)</span>
+                <span>• Location (required)</span>
+                <span>• Phone</span>
+                <span>• Department</span>
+                <span>• Hire Date</span>
+                <span>• Employee Score (0-100)</span>
+                <span>• Company Score (0-10)</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-                <div className="flex gap-4">
+        {/* File Upload */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Upload Employee Data</CardTitle>
+            <CardDescription>Select an Excel file (.xlsx, .xls) containing employee information</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
+              <FileSpreadsheet className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <div className="space-y-2">
+                <p className="text-lg font-medium text-gray-900">Choose a file to upload</p>
+                <p className="text-sm text-gray-500">Excel files (.xlsx, .xls) up to 10MB</p>
+              </div>
+              <div className="mt-4">
+                <Input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importing}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Select File
+                </Button>
+              </div>
+            </div>
+
+            {file && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center">
+                  <FileText className="h-5 w-5 text-blue-600 mr-2" />
+                  <div className="flex-1">
+                    <p className="font-medium text-blue-900">{file.name}</p>
+                    <p className="text-sm text-blue-600">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                  </div>
                   <Button
-                    onClick={downloadTemplate}
-                    variant="outline"
-                    className="border-arkus-red text-arkus-red hover:bg-arkus-red hover:text-white bg-transparent"
+                    onClick={handleImport}
+                    disabled={importing}
+                    className="bg-green-600 hover:bg-green-700 text-white"
                   >
-                    <Download className="h-4 w-4 mr-2" />
-                    Download Template
+                    {importing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Importing...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Import Data
+                      </>
+                    )}
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* File Upload */}
-            {!showPreview && (
-              <Card className="border-gray-200">
-                <CardHeader>
-                  <CardTitle className="text-lg text-arkus-navy">Upload File</CardTitle>
-                  <CardDescription>Select or drag and drop your Excel or CSV file</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div
-                    className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                      dragActive
-                        ? "border-arkus-red bg-red-50"
-                        : "border-gray-300 hover:border-arkus-red hover:bg-gray-50"
-                    }`}
-                    onDragEnter={handleDrag}
-                    onDragLeave={handleDrag}
-                    onDragOver={handleDrag}
-                    onDrop={handleDrop}
-                  >
-                    <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-lg font-medium text-arkus-navy mb-2">
-                      {dragActive ? "Drop your file here" : "Drag and drop your file here"}
-                    </p>
-                    <p className="text-sm text-gray-600 mb-4">or</p>
-                    <Button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="bg-arkus-red text-white hover:bg-arkus-red-hover"
-                    >
-                      Choose File
-                    </Button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".xlsx,.xls,.csv"
-                      onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
-                      className="hidden"
-                    />
-                    {selectedFile && (
-                      <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                        <p className="text-sm font-medium text-arkus-navy">{selectedFile.name}</p>
-                        <p className="text-xs text-gray-600">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+              </div>
             )}
 
-            {/* Preview Data */}
-            {showPreview && !importResults && (
-              <Card className="border-gray-200">
-                <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <CardTitle className="text-lg text-arkus-navy">Preview Import Data</CardTitle>
-                      <CardDescription>
-                        Review the data before importing. Records with errors will be skipped.
-                      </CardDescription>
-                    </div>
-                    <Button
-                      onClick={resetImport}
-                      variant="outline"
-                      size="sm"
-                      className="border-gray-300 text-gray-600 hover:bg-gray-50 bg-transparent"
-                    >
-                      <X className="h-4 w-4 mr-2" />
-                      Cancel
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {/* Summary */}
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="bg-blue-50 p-3 rounded-lg text-center">
-                        <p className="text-2xl font-bold text-arkus-navy">{previewData.length}</p>
-                        <p className="text-sm text-gray-600">Total Records</p>
-                      </div>
-                      <div className="bg-green-50 p-3 rounded-lg text-center">
-                        <p className="text-2xl font-bold text-green-600">
-                          {previewData.filter((record) => record.errors.length === 0).length}
-                        </p>
-                        <p className="text-sm text-gray-600">Valid Records</p>
-                      </div>
-                      <div className="bg-red-50 p-3 rounded-lg text-center">
-                        <p className="text-2xl font-bold text-red-600">
-                          {previewData.filter((record) => record.errors.length > 0).length}
-                        </p>
-                        <p className="text-sm text-gray-600">Records with Errors</p>
-                      </div>
-                    </div>
-
-                    {/* Data Preview */}
-                    <div className="max-h-96 overflow-y-auto border border-gray-200 rounded-lg">
-                      <table className="w-full text-sm">
-                        <thead className="bg-gray-50 sticky top-0">
-                          <tr>
-                            <th className="px-3 py-2 text-left font-medium text-arkus-navy">Status</th>
-                            <th className="px-3 py-2 text-left font-medium text-arkus-navy">Name</th>
-                            <th className="px-3 py-2 text-left font-medium text-arkus-navy">Email</th>
-                            <th className="px-3 py-2 text-left font-medium text-arkus-navy">Position</th>
-                            <th className="px-3 py-2 text-left font-medium text-arkus-navy">Location</th>
-                            <th className="px-3 py-2 text-left font-medium text-arkus-navy">Errors</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                          {previewData.map((record, index) => (
-                            <tr key={index} className={record.errors.length > 0 ? "bg-red-50" : "bg-white"}>
-                              <td className="px-3 py-2">
-                                {record.errors.length === 0 ? (
-                                  <CheckCircle className="h-4 w-4 text-green-500" />
-                                ) : (
-                                  <AlertTriangle className="h-4 w-4 text-red-500" />
-                                )}
-                              </td>
-                              <td className="px-3 py-2 font-medium">{record.name}</td>
-                              <td className="px-3 py-2">{record.email}</td>
-                              <td className="px-3 py-2">{record.position}</td>
-                              <td className="px-3 py-2">{record.location}</td>
-                              <td className="px-3 py-2">
-                                {record.errors.length > 0 && (
-                                  <div className="space-y-1">
-                                    {record.errors.map((error, errorIndex) => (
-                                      <p key={errorIndex} className="text-xs text-red-600">
-                                        • {error}
-                                      </p>
-                                    ))}
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Import Actions */}
-                    <div className="flex justify-between items-center pt-4 border-t border-gray-200">
-                      <p className="text-sm text-gray-600">
-                        {previewData.filter((record) => record.errors.length === 0).length} valid records will be
-                        imported
-                      </p>
-                      <div className="flex gap-2">
-                        <Button
-                          onClick={resetImport}
-                          variant="outline"
-                          className="border-gray-300 text-gray-600 hover:bg-gray-50 bg-transparent"
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          onClick={handleImport}
-                          disabled={previewData.filter((record) => record.errors.length === 0).length === 0}
-                          className="bg-arkus-red text-white hover:bg-arkus-red-hover"
-                        >
-                          <Users className="h-4 w-4 mr-2" />
-                          Import Valid Records
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+            {importing && (
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Import Progress</span>
+                  <span>{Math.round(progress)}%</span>
+                </div>
+                <Progress value={progress} className="w-full" />
+              </div>
             )}
+          </CardContent>
+        </Card>
 
-            {/* Import Progress */}
-            {isImporting && (
-              <Card className="border-gray-200">
-                <CardHeader>
-                  <CardTitle className="text-lg text-arkus-navy">Importing Data...</CardTitle>
-                  <CardDescription>Please wait while we process your file</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <Progress value={importProgress} className="w-full" />
-                    <p className="text-sm text-gray-600 text-center">{importProgress}% Complete</p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+        {/* Preview */}
+        {showPreview && previewData.length > 0 && (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle>Data Preview</CardTitle>
+              <CardDescription>First 5 rows from your file (review before importing)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Name
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Position
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Location
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Score
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {previewData.map((user, index) => (
+                      <tr key={index}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {user.name || "—"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.email || "—"}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.position || "—"}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.location || "—"}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {user.employee_score || "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-            {/* Import Results */}
-            {importResults && (
-              <Card className="border-gray-200">
-                <CardHeader>
-                  <CardTitle className="text-lg text-arkus-navy flex items-center">
-                    <CheckCircle className="h-5 w-5 mr-2 text-green-500" />
-                    Import Completed
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="bg-blue-50 p-4 rounded-lg text-center">
-                        <p className="text-2xl font-bold text-arkus-navy">{importResults.total}</p>
-                        <p className="text-sm text-gray-600">Total Processed</p>
-                      </div>
-                      <div className="bg-green-50 p-4 rounded-lg text-center">
-                        <p className="text-2xl font-bold text-green-600">{importResults.success}</p>
-                        <p className="text-sm text-gray-600">Successfully Imported</p>
-                      </div>
-                      <div className="bg-red-50 p-4 rounded-lg text-center">
-                        <p className="text-2xl font-bold text-red-600">{importResults.errors}</p>
-                        <p className="text-sm text-gray-600">Errors/Skipped</p>
-                      </div>
+        {/* Results */}
+        {result && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Import Results</CardTitle>
+              <CardDescription>Summary of the import operation</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Summary */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <CheckCircle className="h-8 w-8 text-green-600" />
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-green-800">Successful</p>
+                      <p className="text-2xl font-bold text-green-900">{result.success}</p>
                     </div>
+                  </div>
+                </div>
 
-                    {importResults.errors > 0 && (
-                      <Alert>
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertDescription>
-                          {importResults.errors} records were skipped due to validation errors. Please check the error
-                          details above and correct the data before re-importing.
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <AlertTriangle className="h-8 w-8 text-yellow-600" />
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-yellow-800">Warnings</p>
+                      <p className="text-2xl font-bold text-yellow-900">{result.warnings.length}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <XCircle className="h-8 w-8 text-red-600" />
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-red-800">Errors</p>
+                      <p className="text-2xl font-bold text-red-900">{result.errors.length}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Errors */}
+              {result.errors.length > 0 && (
+                <div>
+                  <h4 className="font-medium text-red-900 mb-3">Errors ({result.errors.length})</h4>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {result.errors.map((error, index) => (
+                      <Alert key={index} className="border-red-200 bg-red-50">
+                        <XCircle className="h-4 w-4" />
+                        <AlertDescription className="text-red-800">
+                          <strong>Row {error.row}:</strong> {error.error}
+                          {error.data && (
+                            <div className="mt-1 text-sm">
+                              {error.data.name && <span>Name: {error.data.name} | </span>}
+                              {error.data.email && <span>Email: {error.data.email}</span>}
+                            </div>
+                          )}
                         </AlertDescription>
                       </Alert>
-                    )}
-
-                    <div className="flex justify-center">
-                      <Button onClick={resetImport} className="bg-arkus-red text-white hover:bg-arkus-red-hover">
-                        Import Another File
-                      </Button>
-                    </div>
+                    ))}
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Right Column - Import History */}
-          <div className="lg:col-span-1">
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy">Import History</CardTitle>
-                <CardDescription>Recent bulk import activities</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {importHistory.map((import_) => (
-                    <div key={import_.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <p className="font-medium text-arkus-navy text-sm">{import_.fileName}</p>
-                          <p className="text-xs text-gray-600">by {import_.importedBy}</p>
-                        </div>
-                        {getStatusBadge(import_.status)}
-                      </div>
-
-                      <div className="text-xs text-gray-600 space-y-1">
-                        <p>{formatDate(import_.importDate)}</p>
-                        <div className="flex justify-between">
-                          <span>Processed:</span>
-                          <span className="font-medium">{import_.recordsProcessed}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Success:</span>
-                          <span className="font-medium text-green-600">{import_.recordsSuccess}</span>
-                        </div>
-                        {import_.recordsErrors > 0 && (
-                          <div className="flex justify-between">
-                            <span>Errors:</span>
-                            <span className="font-medium text-red-600">{import_.recordsErrors}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+              )}
+
+              {/* Warnings */}
+              {result.warnings.length > 0 && (
+                <div>
+                  <h4 className="font-medium text-yellow-900 mb-3">Warnings ({result.warnings.length})</h4>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {result.warnings.map((warning, index) => (
+                      <Alert key={index} className="border-yellow-200 bg-yellow-50">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription className="text-yellow-800">
+                          <strong>Row {warning.row}:</strong> {warning.warning}
+                          {warning.data && (
+                            <div className="mt-1 text-sm">
+                              {warning.data.name && <span>Name: {warning.data.name} | </span>}
+                              {warning.data.email && <span>Email: {warning.data.email}</span>}
+                            </div>
+                          )}
+                        </AlertDescription>
+                      </Alert>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {result.success > 0 && (
+                <div className="flex justify-center">
+                  <Link href="/">
+                    <Button className="bg-green-600 hover:bg-green-700 text-white">
+                      <Users className="h-4 w-4 mr-2" />
+                      View Imported Employees
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </main>
     </div>
+  )
+}
+
+export default function ImportPageWithAuth() {
+  return (
+    <ProtectedRoute requiredPermission="canUploadUsers">
+      <ImportPage />
+    </ProtectedRoute>
   )
 }

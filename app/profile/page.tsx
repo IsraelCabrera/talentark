@@ -1,174 +1,204 @@
 "use client"
 
-import type React from "react"
-
-import {
-  ArrowLeft,
-  Edit,
-  MapPin,
-  Globe,
-  Mail,
-  Calendar,
-  Award,
-  Code,
-  Briefcase,
-  GraduationCap,
-  Languages,
-  Save,
-  X,
-  Clock,
-  Download,
-  Users,
-} from "lucide-react"
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { User, Mail, MapPin, Building2, Calendar, Globe, AlertTriangle, RefreshCw, ArrowLeft, Settings, CheckCircle, Save, Upload, Download, Eye, Edit3, X, FileText, Loader2 } from 'lucide-react'
 import Link from "next/link"
 import Image from "next/image"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Input } from "@/components/ui/input"
-import { useState } from "react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { generateProfilePDF } from "@/lib/pdf-generator"
+import { fetchUserById, isSupabaseConfigured, testConnection } from "@/lib/supabase-client"
+import { generatePDF, downloadPDF } from "@/lib/pdf-generator"
 
-// Mock supervisors/managers data - in a real app, this would come from the API
-const availableSupervisors = [
-  { id: 2, name: "Carlos Ruiz", position: "Engineering Manager", email: "carlos.ruiz@arkus.com" },
-  { id: 3, name: "Sofia Gonzalez", position: "Technical Lead", email: "sofia.gonzalez@arkus.com" },
-  { id: 4, name: "Miguel Torres", position: "Project Manager", email: "miguel.torres@arkus.com" },
-  { id: 5, name: "Ana Martinez", position: "Senior Developer", email: "ana.martinez@arkus.com" },
-]
-
-// Mock user data - in a real app, this would come from authentication
-const initialUserData = {
-  id: 1,
-  name: "Sarah Johnson",
-  email: "sarah.johnson@arkus.com",
-  role: "employee",
-  location: "Tijuana, MX",
-  english_level: "Native",
-  status: "assigned",
-  level: "T4",
-  position: "Senior Full Stack Developer",
-  company: "Arkus",
-  profilePicture: null, // Add this field
-  about:
-    "Experienced full-stack developer with expertise in React and Node.js. Passionate about creating scalable web applications and mentoring junior developers.",
-  reportsTo: {
-    id: 2,
-    name: "Carlos Ruiz",
-    position: "Engineering Manager",
-    email: "carlos.ruiz@arkus.com",
-  },
-  workExperience: [
-    {
-      position: "Senior Full Stack Developer",
-      company: "Arkus",
-      startDate: "2023-01-15",
-      endDate: null,
-      description:
-        "Leading development of e-commerce platform using React and Node.js. Managing a team of 3 developers and collaborating with design and product teams.",
-      isCurrent: true,
-    },
-    {
-      position: "Full Stack Developer",
-      company: "TechCorp",
-      startDate: "2021-06-01",
-      endDate: "2022-12-31",
-      description:
-        "Developed and maintained web applications using React, Node.js, and PostgreSQL. Implemented CI/CD pipelines and improved application performance by 40%.",
-      isCurrent: false,
-    },
-  ],
-  projects: [
-    {
-      name: "E-commerce Platform",
-      client: "RetailCorp",
-      description:
-        "Built a comprehensive e-commerce solution with React frontend and Node.js backend, handling 10k+ daily transactions.",
-      startDate: "2023-02-01",
-      endDate: "2023-08-15",
-    },
-    {
-      name: "CRM System",
-      client: "SalesTech",
-      description:
-        "Developed a customer relationship management system with advanced analytics and reporting features.",
-      startDate: "2022-09-01",
-      endDate: "2023-01-30",
-    },
-  ],
-  technologies: [
-    { name: "React", level: "Expert" },
-    { name: "Node.js", level: "Expert" },
-    { name: "PostgreSQL", level: "Advanced" },
-    { name: "TypeScript", level: "Expert" },
-    { name: "AWS", level: "Advanced" },
-    { name: "Docker", level: "Intermediate" },
-  ],
-  skills: [
-    { name: "Team Leadership", level: "Advanced" },
-    { name: "Project Management", level: "Intermediate" },
-    { name: "System Architecture", level: "Advanced" },
-  ],
-  certifications: [
-    {
-      title: "AWS Solutions Architect",
-      issuer: "Amazon Web Services",
-      issueDate: "2023-03-15",
-      expirationDate: "2026-03-15",
-      credentialUrl: "https://aws.amazon.com/certification/",
-    },
-    {
-      title: "React Professional",
-      issuer: "Meta",
-      issueDate: "2022-11-20",
-      expirationDate: null,
-      credentialUrl: "https://developers.facebook.com/certification/",
-    },
-  ],
-  education: [
-    {
-      degreeTitle: "Bachelor of Computer Science",
-      institutionName: "Universidad de Guadalajara",
-      graduationDate: "2020-05-15",
-    },
-  ],
-  languages: [
-    { name: "Spanish", proficiency: "Native" },
-    { name: "English", proficiency: "Native" },
-    { name: "Portuguese", proficiency: "Intermediate" },
-  ],
-  profileReview: {
-    lastReviewedDate: "2024-01-15",
-    approvalStatus: "approved",
-    reviewedBy: "Carlos Ruiz",
-    reviewNotes: "Profile is complete and up to date. All certifications verified.",
-    companyScore: 9,
-  },
-  profilePicture: null,
+interface Manager {
+  id: string
+  name: string
+  email: string
+  position: string
 }
 
-export default function MyProfilePage() {
-  const [currentUser, setCurrentUser] = useState(initialUserData)
+interface ArkusProject {
+  id: string
+  project_name: string
+  client_name: string
+  description: string
+  start_date: string
+  end_date: string | null
+  allocation_percentage: number
+  is_current: boolean
+}
+
+interface Certification {
+  id: string
+  title: string
+  issuer: string
+  issue_date: string
+  expiration_date: string | null
+  credential_url: string | null
+}
+
+interface Language {
+  id: string
+  language_name: string
+  proficiency_level: string
+}
+
+interface Technology {
+  level: string
+  technologies: { name: string }
+}
+
+interface Skill {
+  id: string
+  skill_name: string
+  level: string
+}
+
+interface Education {
+  id: string
+  degree_title: string
+  institution_name: string
+  graduation_date: string
+}
+
+interface UserProfile {
+  id: string
+  name: string
+  email: string
+  role: string
+  location?: string
+  english_level?: string
+  status: string
+  level: string
+  position?: string
+  company?: string
+  about?: string
+  reports_to?: string
+  employee_score?: number
+  company_score?: number
+  current_project_assignment?: string
+  project_allocation_percentage?: number
+  created_at: string
+  updated_at: string
+  manager?: Manager
+  arkus_projects: ArkusProject[]
+  certifications: Certification[]
+  languages: Language[]
+  technologies: Technology[]
+  skills: Skill[]
+  education: Education[]
+}
+
+export default function ProfilePage() {
+  const [user, setUser] = useState<UserProfile | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
-  const [isExporting, setIsExporting] = useState(false)
-  const [editFormData, setEditFormData] = useState({
-    name: currentUser.name,
-    email: currentUser.email,
-    position: currentUser.position,
-    location: currentUser.location,
-    english_level: currentUser.english_level,
-    status: currentUser.status,
-    level: currentUser.level,
-    about: currentUser.about,
-    reportsToId: currentUser.reportsTo?.id?.toString() || "0", // Updated default value to "0"
-  })
-  const [showPendingAlert, setShowPendingAlert] = useState(false)
-  const [profilePicture, setProfilePicture] = useState<string | null>(null)
-  const [profilePictureFile, setProfilePictureFile] = useState<File | null>(null)
+  const [editedUser, setEditedUser] = useState<Partial<UserProfile>>({})
+  const [isExportingPDF, setIsExportingPDF] = useState(false)
+  const [connectionStatus, setConnectionStatus] = useState<{
+    success: boolean
+    message: string
+    details: string
+  } | null>(null)
+
+  // Mock user ID for demo - in real app this would come from auth/params
+  const userId = "dca37910-61d0-474f-a7b5-6323aad275fa"
+
+  const loadUser = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      console.log("Loading user profile for ID:", userId)
+
+      // First test the connection
+      const connTest = await testConnection()
+      setConnectionStatus(connTest)
+
+      if (!connTest.success) {
+        setError(connTest.message)
+        return
+      }
+
+      const data = await fetchUserById(userId)
+      console.log("User data loaded:", data)
+      setUser(data)
+      setEditedUser(data)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to load user profile"
+      setError(errorMessage)
+      console.error("Error loading user:", err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadUser()
+  }, [])
+
+  const handleSave = async () => {
+    // In a real app, this would save to the database
+    console.log("Saving user data:", editedUser)
+    setUser({ ...user!, ...editedUser })
+    setIsEditing(false)
+    // Show success message
+  }
+
+  const handleCancel = () => {
+    setEditedUser(user || {})
+    setIsEditing(false)
+  }
+
+  const handleExportPDF = async () => {
+    if (!user) return
+    
+    try {
+      setIsExportingPDF(true)
+      console.log("Starting PDF export for user:", user.name)
+      
+      const pdfBlob = await generatePDF(user)
+      const fileName = `${user.name.replace(/\s+/g, '_')}_Profile_${new Date().toISOString().split('T')[0]}.pdf`
+      
+      downloadPDF(pdfBlob, fileName)
+      
+      console.log("PDF export completed successfully")
+    } catch (error) {
+      console.error('Error generating PDF:', error)
+      // In a real app, you might want to show a toast notification here
+      alert('Failed to generate PDF. Please try again.')
+    } finally {
+      setIsExportingPDF(false)
+    }
+  }
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+  }
+
+  const getRoleDisplayName = (role: string) => {
+    const roleMap: Record<string, string> = {
+      employee: "Employee",
+      pm: "Project Manager",
+      hr: "Human Resources",
+      admin: "Administrator",
+    }
+    return roleMap[role] || role.charAt(0).toUpperCase() + role.slice(1)
+  }
+
+  const getStatusBadgeColor = (status: string) => {
+    return status === "available" ? "bg-green-100 text-green-800" : "bg-blue-100 text-blue-800"
+  }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -178,738 +208,408 @@ export default function MyProfilePage() {
     })
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "approved":
-        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">✅ Approved</Badge>
-      case "needs_changes":
-        return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">❗ Needs Changes</Badge>
-      case "pending_review":
-        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">⏳ Pending Review</Badge>
-      default:
-        return null
-    }
-  }
+  // Show configuration needed state
+  if (!isSupabaseConfigured()) {
+    return (
+      <div className="min-h-screen bg-arkus-gray">
+        <header className="bg-arkus-navy border-b border-gray-300">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center py-6">
+              <div className="flex items-center">
+                <Image src="/images/arkus-logo.png" alt="Arkus Logo" width={40} height={40} className="mr-3" />
+                <div>
+                  <h1 className="text-2xl font-bold text-white">TalentArk</h1>
+                  <p className="text-sm text-gray-300">My Profile</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
 
-  const getCompanyScoreBadge = (score: number | null | undefined) => {
-    if (score === null || score === undefined) {
-      return (
-        <Badge variant="outline" className="border-gray-400 text-gray-600">
-          Not Scored
-        </Badge>
-      )
-    }
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <Card className="w-full max-w-2xl mx-auto">
+            <CardHeader className="text-center">
+              <div className="mx-auto w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mb-4">
+                <Settings className="h-6 w-6 text-yellow-600" />
+              </div>
+              <CardTitle className="text-arkus-navy">Database Configuration Required</CardTitle>
+              <CardDescription>Please configure your Supabase database connection to view your profile</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert className="border-yellow-200 bg-yellow-50">
+                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                <AlertDescription className="text-yellow-800">
+                  <strong>Missing Environment Variables:</strong>
+                  <br />• NEXT_PUBLIC_SUPABASE_URL
+                  <br />• NEXT_PUBLIC_SUPABASE_ANON_KEY
+                </AlertDescription>
+              </Alert>
 
-    if (score >= 8) {
-      return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">⭐ {score}/10</Badge>
-    } else if (score >= 5) {
-      return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">⭐ {score}/10</Badge>
-    } else {
-      return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">⭐ {score}/10</Badge>
-    }
-  }
-
-  const handleEditFormChange = (field: string, value: string) => {
-    setEditFormData((prev) => ({ ...prev, [field]: value }))
-  }
-
-  const handleStartEdit = () => {
-    setIsEditing(true)
-    setShowPendingAlert(false)
-    // Reset form data to current values
-    setEditFormData({
-      name: currentUser.name,
-      email: currentUser.email,
-      position: currentUser.position,
-      location: currentUser.location,
-      english_level: currentUser.english_level,
-      status: currentUser.status,
-      level: currentUser.level,
-      about: currentUser.about,
-      reportsToId: currentUser.reportsTo?.id?.toString() || "0", // Updated default value to "0"
-    })
-  }
-
-  const handleProfilePictureChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      setProfilePictureFile(file)
-      // Create a preview URL
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setProfilePicture(e.target?.result as string)
-      }
-      reader.readAsDataURL(file)
-    }
-  }
-
-  const handleSaveProfile = () => {
-    // Find the selected supervisor
-    const selectedSupervisor = availableSupervisors.find(
-      (supervisor) => supervisor.id.toString() === editFormData.reportsToId,
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Link href="/config-supabase" className="flex-1">
+                  <Button className="w-full bg-arkus-red text-white hover:bg-arkus-red-hover">
+                    Configure Database
+                  </Button>
+                </Link>
+                <Link href="/test-connection" className="flex-1">
+                  <Button
+                    variant="outline"
+                    className="w-full border-arkus-navy text-arkus-navy hover:bg-arkus-navy hover:text-white bg-transparent"
+                  >
+                    Test Connection
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
     )
-
-    // Update the user data with form data
-    const updatedUser = {
-      ...currentUser,
-      ...editFormData,
-      reportsTo: selectedSupervisor || null,
-      profilePicture: profilePicture || currentUser.profilePicture, // Add profile picture
-      profileReview: {
-        lastReviewedDate: null, // Reset to null when changes are made
-        approvalStatus: "pending_review", // Set to pending review
-        reviewedBy: null,
-        reviewNotes: "Profile updated by user. Awaiting supervisor review.",
-        companyScore: null, // Reset score when profile is updated
-      },
-    }
-
-    setCurrentUser(updatedUser)
-    setIsEditing(false)
-    setShowPendingAlert(true)
-
-    // In a real app, this would make an API call to update the profile including uploading the image
-    console.log("Saving profile:", editFormData)
-    console.log("Profile picture file:", profilePictureFile)
-    console.log("Updated user:", updatedUser)
-
-    // Hide the alert after 5 seconds
-    setTimeout(() => {
-      setShowPendingAlert(false)
-    }, 5000)
-  }
-
-  const handleCancelEdit = () => {
-    // Reset form data to original values
-    setEditFormData({
-      name: currentUser.name,
-      email: currentUser.email,
-      position: currentUser.position,
-      location: currentUser.location,
-      english_level: currentUser.english_level,
-      status: currentUser.status,
-      level: currentUser.level,
-      about: currentUser.about,
-      reportsToId: currentUser.reportsTo?.id?.toString() || "0",
-    })
-    setProfilePicture(null)
-    setProfilePictureFile(null)
-    setIsEditing(false)
-  }
-
-  const handleExportPDF = async () => {
-    setIsExporting(true)
-    try {
-      // Add a small delay to show loading state
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      generateProfilePDF(currentUser)
-    } catch (error) {
-      console.error("Error generating PDF:", error)
-      alert("Error generating PDF. Please try again.")
-    } finally {
-      setIsExporting(false)
-    }
   }
 
   return (
     <div className="min-h-screen bg-arkus-gray">
-      {/* Header */}
       <header className="bg-arkus-navy border-b border-gray-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
               <Image src="/images/arkus-logo.png" alt="Arkus Logo" width={40} height={40} className="mr-3" />
               <div>
-                <h1 className="text-2xl font-bold text-white">My Profile</h1>
-                <p className="text-sm text-gray-300">Manage your professional information</p>
+                <h1 className="text-2xl font-bold text-white">TalentArk</h1>
+                <p className="text-sm text-gray-300">My Profile</p>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
+            <nav className="hidden md:flex space-x-8">
+              <Link href="/" className="text-gray-300 hover:text-white transition-colors">
+                Dashboard
+              </Link>
+              <Link href="/analytics" className="text-gray-300 hover:text-white transition-colors">
+                Analytics
+              </Link>
+              <Link href="/org-chart" className="text-gray-300 hover:text-white transition-colors">
+                Org Chart
+              </Link>
+              <Link href="/import" className="text-gray-300 hover:text-white transition-colors">
+                Import
+              </Link>
+            </nav>
+          </div>
+        </div>
+      </header>
+
+      {connectionStatus && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+          <Alert className={connectionStatus.success ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
+            {connectionStatus.success ? (
+              <CheckCircle className="h-4 w-4 text-green-600" />
+            ) : (
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+            )}
+            <AlertDescription className={connectionStatus.success ? "text-green-800" : "text-red-800"}>
+              <strong>{connectionStatus.message}</strong>
+              {connectionStatus.details && <div className="text-sm mt-1">{connectionStatus.details}</div>}
+            </AlertDescription>
+          </Alert>
+        </div>
+      )}
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-6 flex justify-between items-center">
+          <Link href="/">
+            <Button
+              variant="outline"
+              className="border-arkus-navy text-arkus-navy hover:bg-arkus-navy hover:text-white bg-transparent"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Dashboard
+            </Button>
+          </Link>
+          
+          {user && (
+            <div className="flex gap-2">
               <Button
                 onClick={handleExportPDF}
-                disabled={isExporting}
+                disabled={isExportingPDF}
                 variant="outline"
-                className="border-white text-white hover:bg-white hover:text-arkus-navy bg-transparent"
+                className="border-arkus-navy text-arkus-navy hover:bg-arkus-navy hover:text-white bg-transparent"
               >
-                <Download className="h-4 w-4 mr-2" />
-                {isExporting ? "Generating PDF..." : "Export PDF"}
+                {isExportingPDF ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Export PDF
+                  </>
+                )}
               </Button>
               {!isEditing ? (
                 <Button
-                  onClick={handleStartEdit}
-                  variant="outline"
-                  className="border-white text-white hover:bg-white hover:text-arkus-navy bg-transparent"
+                  onClick={() => setIsEditing(true)}
+                  className="bg-arkus-red text-white hover:bg-arkus-red-hover"
                 >
-                  <Edit className="h-4 w-4 mr-2" />
+                  <Edit3 className="h-4 w-4 mr-2" />
                   Edit Profile
                 </Button>
               ) : (
-                <div className="flex space-x-2">
-                  <Button onClick={handleSaveProfile} className="bg-arkus-red text-white hover:bg-arkus-red-hover">
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleSave}
+                    className="bg-green-600 text-white hover:bg-green-700"
+                  >
                     <Save className="h-4 w-4 mr-2" />
-                    Save Changes
+                    Save
                   </Button>
                   <Button
-                    onClick={handleCancelEdit}
+                    onClick={handleCancel}
                     variant="outline"
-                    className="border-white text-white hover:bg-white hover:text-arkus-navy bg-transparent"
+                    className="border-gray-300 text-gray-700 hover:bg-gray-100 bg-transparent"
                   >
                     <X className="h-4 w-4 mr-2" />
                     Cancel
                   </Button>
                 </div>
               )}
-              <Link href="/">
-                <Button
-                  variant="outline"
-                  className="border-white text-white hover:bg-white hover:text-arkus-navy bg-transparent"
-                >
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Directory
-                </Button>
-              </Link>
             </div>
-          </div>
+          )}
         </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Pending Review Alert */}
-        {showPendingAlert && (
-          <Alert className="mb-6 border-blue-200 bg-blue-50">
-            <Clock className="h-4 w-4 text-blue-600" />
-            <AlertDescription className="text-blue-800">
-              <strong>Profile Updated!</strong> Your changes have been submitted for supervisor review. Your profile
-              status is now "Pending Review" until approved.
-            </AlertDescription>
-          </Alert>
+        {error && (
+          <Card className="mb-8 border-red-200 bg-red-50">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <AlertTriangle className="h-5 w-5 text-red-600 mr-3" />
+                  <div>
+                    <h3 className="text-red-800 font-medium">Profile Error</h3>
+                    <p className="text-red-700 text-sm">{error}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Link href="/config-supabase">
+                    <Button size="sm" className="bg-arkus-red text-white hover:bg-arkus-red-hover">
+                      <Settings className="h-4 w-4 mr-1" />
+                      Configure
+                    </Button>
+                  </Link>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={loadUser}
+                    className="border-red-300 text-red-700 hover:bg-red-100 bg-transparent"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-1" />
+                    Retry
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Basic Info */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* Profile Card */}
-            <Card className="border-gray-200">
-              <CardContent className="p-6">
-                <div className="text-center">
-                  <Avatar className="h-24 w-24 mx-auto mb-4 relative group">
-                    <AvatarImage
-                      src={
-                        profilePicture ||
-                        currentUser.profilePicture ||
-                        `/placeholder.svg?height=96&width=96&text=${currentUser.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}`
-                      }
-                    />
-                    <AvatarFallback className="bg-arkus-red text-white text-2xl">
-                      {currentUser.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </AvatarFallback>
+        {loading && (
+          <Card className="bg-white border border-gray-200">
+            <CardContent className="p-12 text-center">
+              <RefreshCw className="h-8 w-8 animate-spin text-arkus-red mx-auto mb-4" />
+              <p className="text-gray-600">Loading your profile...</p>
+            </CardContent>
+          </Card>
+        )}
 
-                    {isEditing && (
-                      <>
-                        <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                          <Edit className="h-6 w-6 text-white" />
-                        </div>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleProfilePictureChange}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer rounded-full"
-                          title="Click to change profile picture"
+        {!loading && !error && user && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left Column - Profile Overview */}
+            <div className="lg:col-span-1 space-y-6">
+              {/* Basic Profile Card */}
+              <Card className="bg-white border border-gray-200">
+                <CardContent className="p-6">
+                  <div className="text-center mb-6">
+                    <div className="relative">
+                      <Avatar className="h-24 w-24 mx-auto mb-4">
+                        <AvatarImage src="/placeholder.svg" alt={user.name} />
+                        <AvatarFallback className="bg-arkus-red text-white text-xl">
+                          {getInitials(user.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      {isEditing && (
+                        <Button
+                          size="sm"
+                          className="absolute bottom-0 right-1/2 transform translate-x-1/2 translate-y-2 bg-arkus-red text-white hover:bg-arkus-red-hover"
+                        >
+                          <Upload className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    
+                    {isEditing ? (
+                      <div className="space-y-3">
+                        <Input
+                          value={editedUser.name || user.name}
+                          onChange={(e) => setEditedUser({ ...editedUser, name: e.target.value })}
+                          className="text-center text-xl font-bold"
                         />
+                        <Input
+                          value={editedUser.position || user.position || getRoleDisplayName(user.role)}
+                          onChange={(e) => setEditedUser({ ...editedUser, position: e.target.value })}
+                          className="text-center"
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <h2 className="text-2xl font-bold text-arkus-navy mb-2">{user.name}</h2>
+                        <p className="text-gray-600 mb-4">{user.position || getRoleDisplayName(user.role)}</p>
                       </>
                     )}
-                  </Avatar>
-
-                  {isEditing && <p className="text-xs text-gray-500 mb-2">Click on your photo to change it</p>}
-
-                  {/* Editable Name */}
-                  {isEditing ? (
-                    <div className="mb-2">
-                      <Input
-                        value={editFormData.name}
-                        onChange={(e) => handleEditFormChange("name", e.target.value)}
-                        className="text-center text-xl font-bold border-gray-300 focus:border-arkus-red focus:ring-arkus-red"
-                      />
-                    </div>
-                  ) : (
-                    <h2 className="text-2xl font-bold text-arkus-navy mb-1">{currentUser.name}</h2>
-                  )}
-
-                  {/* Editable Position */}
-                  {isEditing ? (
-                    <div className="mb-4">
-                      <Input
-                        value={editFormData.position}
-                        onChange={(e) => handleEditFormChange("position", e.target.value)}
-                        className="text-center border-gray-300 focus:border-arkus-red focus:ring-arkus-red"
-                      />
-                    </div>
-                  ) : (
-                    <p className="text-gray-600 mb-4">{currentUser.position}</p>
-                  )}
-
-                  <div className="flex justify-center gap-2 mb-4">
-                    {/* Editable Status */}
-                    {isEditing ? (
-                      <Select
-                        value={editFormData.status}
-                        onValueChange={(value) => handleEditFormChange("status", value)}
-                      >
-                        <SelectTrigger className="w-32 border-gray-300 focus:border-arkus-red focus:ring-arkus-red">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="available">Available</SelectItem>
-                          <SelectItem value="assigned">Assigned</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Badge
-                        variant={currentUser.status === "available" ? "default" : "secondary"}
-                        className={`${
-                          currentUser.status === "available"
-                            ? "bg-arkus-red text-white hover:bg-arkus-red-hover"
-                            : "bg-gray-200 text-arkus-navy hover:bg-gray-300"
-                        }`}
-                      >
-                        {currentUser.status === "available" ? "Available" : "Assigned"}
+                    
+                    <div className="flex justify-center gap-2 mb-4">
+                      <Badge className={`${getStatusBadgeColor(user.status)}`}>
+                        {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
                       </Badge>
-                    )}
-
-                    {/* Editable Level */}
-                    {isEditing ? (
-                      <Select
-                        value={editFormData.level}
-                        onValueChange={(value) => handleEditFormChange("level", value)}
-                      >
-                        <SelectTrigger className="w-20 border-gray-300 focus:border-arkus-red focus:ring-arkus-red">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="T1">T1</SelectItem>
-                          <SelectItem value="T2">T2</SelectItem>
-                          <SelectItem value="T3">T3</SelectItem>
-                          <SelectItem value="T4">T4</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Badge variant="outline" className="border-arkus-navy text-arkus-navy">
-                        {currentUser.level}
-                      </Badge>
-                    )}
+                      <Badge variant="outline">{user.level}</Badge>
+                    </div>
                   </div>
 
-                  <div className="space-y-2 text-sm text-gray-600">
-                    {/* Editable Email */}
-                    <div className="flex items-center justify-center">
-                      <Mail className="h-4 w-4 mr-2" />
+                  <div className="space-y-4">
+                    <div className="flex items-center text-sm">
+                      <Mail className="h-4 w-4 mr-3 text-gray-400" />
                       {isEditing ? (
                         <Input
                           type="email"
-                          value={editFormData.email}
-                          onChange={(e) => handleEditFormChange("email", e.target.value)}
-                          className="text-sm h-6 border-gray-300 focus:border-arkus-red focus:ring-arkus-red"
+                          value={editedUser.email || user.email}
+                          onChange={(e) => setEditedUser({ ...editedUser, email: e.target.value })}
+                          className="text-sm"
                         />
                       ) : (
-                        currentUser.email
+                        <span className="text-gray-600">{user.email}</span>
                       )}
                     </div>
-
-                    {/* Editable Location */}
-                    <div className="flex items-center justify-center">
-                      <MapPin className="h-4 w-4 mr-2" />
+                    <div className="flex items-center text-sm">
+                      <Building2 className="h-4 w-4 mr-3 text-gray-400" />
+                      <span className="text-gray-600">{getRoleDisplayName(user.role)}</span>
+                    </div>
+                    <div className="flex items-center text-sm">
+                      <MapPin className="h-4 w-4 mr-3 text-gray-400" />
                       {isEditing ? (
-                        <Select
-                          value={editFormData.location}
-                          onValueChange={(value) => handleEditFormChange("location", value)}
-                        >
-                          <SelectTrigger className="w-40 h-6 text-sm border-gray-300 focus:border-arkus-red focus:ring-arkus-red">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Tijuana, MX">Tijuana, MX</SelectItem>
-                            <SelectItem value="Culiacán, MX">Culiacán, MX</SelectItem>
-                            <SelectItem value="Guadalajara, MX">Guadalajara, MX</SelectItem>
-                            <SelectItem value="Colima, MX">Colima, MX</SelectItem>
-                            <SelectItem value="Aguascalientes, MX">Aguascalientes, MX</SelectItem>
-                            <SelectItem value="CDMX, MX">CDMX, MX</SelectItem>
-                            <SelectItem value="Medellín, COL">Medellín, COL</SelectItem>
-                            <SelectItem value="Cali, COL">Cali, COL</SelectItem>
-                            <SelectItem value="Bogotá, COL">Bogotá, COL</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Input
+                          value={editedUser.location || user.location || ""}
+                          onChange={(e) => setEditedUser({ ...editedUser, location: e.target.value })}
+                          placeholder="Location"
+                          className="text-sm"
+                        />
                       ) : (
-                        currentUser.location
+                        <span className="text-gray-600">{user.location || "Not specified"}</span>
                       )}
                     </div>
-
-                    {/* Editable English Level */}
-                    <div className="flex items-center justify-center">
-                      <Globe className="h-4 w-4 mr-2" />
-                      English:{" "}
+                    <div className="flex items-center text-sm">
+                      <Globe className="h-4 w-4 mr-3 text-gray-400" />
                       {isEditing ? (
-                        <Select
-                          value={editFormData.english_level}
-                          onValueChange={(value) => handleEditFormChange("english_level", value)}
-                        >
-                          <SelectTrigger className="w-32 h-6 text-sm ml-1 border-gray-300 focus:border-arkus-red focus:ring-arkus-red">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Basic">Basic</SelectItem>
-                            <SelectItem value="Intermediate">Intermediate</SelectItem>
-                            <SelectItem value="Advanced">Advanced</SelectItem>
-                            <SelectItem value="Native">Native</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Input
+                          value={editedUser.english_level || user.english_level || ""}
+                          onChange={(e) => setEditedUser({ ...editedUser, english_level: e.target.value })}
+                          placeholder="English level"
+                          className="text-sm"
+                        />
                       ) : (
-                        currentUser.english_level
+                        <span className="text-gray-600">English: {user.english_level || "Not specified"}</span>
                       )}
                     </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Reports To Card */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy flex items-center">
-                  <Users className="h-5 w-5 mr-2" />
-                  Reports To
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {isEditing ? (
-                  <div className="space-y-2">
-                    <Select
-                      value={editFormData.reportsToId}
-                      onValueChange={(value) => handleEditFormChange("reportsToId", value)}
-                    >
-                      <SelectTrigger className="border-gray-300 focus:border-arkus-red focus:ring-arkus-red">
-                        <SelectValue placeholder="Select supervisor" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="0">No supervisor</SelectItem>
-                        {availableSupervisors.map((supervisor) => (
-                          <SelectItem key={supervisor.id} value={supervisor.id.toString()}>
-                            {supervisor.name} - {supervisor.position}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : currentUser.reportsTo ? (
-                  <div className="flex items-center space-x-3">
-                    <Avatar className="h-10 w-10">
-                      <AvatarImage
-                        src={`/placeholder.svg?height=40&width=40&text=${currentUser.reportsTo.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}`}
-                      />
-                      <AvatarFallback className="bg-arkus-red text-white text-sm">
-                        {currentUser.reportsTo.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-medium text-arkus-navy">{currentUser.reportsTo.name}</p>
-                      <p className="text-sm text-gray-600">{currentUser.reportsTo.position}</p>
-                      <p className="text-xs text-gray-500">{currentUser.reportsTo.email}</p>
+                    <div className="flex items-center text-sm">
+                      <Calendar className="h-4 w-4 mr-3 text-gray-400" />
+                      <span className="text-gray-600">Joined {formatDate(user.created_at)}</span>
                     </div>
                   </div>
-                ) : (
-                  <p className="text-gray-500 text-sm">No supervisor assigned</p>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
 
-            {/* Profile Review Status */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy flex items-center">
-                  <Award className="h-5 w-5 mr-2" />
-                  Profile Review Status
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <p className="text-sm font-medium text-arkus-navy mb-1">Status:</p>
-                  {getStatusBadge(currentUser.profileReview.approvalStatus)}
-                </div>
-
-                <div>
-                  <p className="text-sm font-medium text-arkus-navy mb-1">Company Score:</p>
-                  {getCompanyScoreBadge(currentUser.profileReview.companyScore)}
-                </div>
-
-                <div>
-                  <p className="text-sm font-medium text-arkus-navy mb-1">Last Reviewed:</p>
-                  <p className="text-sm text-gray-600">
-                    {currentUser.profileReview.lastReviewedDate
-                      ? formatDate(currentUser.profileReview.lastReviewedDate)
-                      : "Never reviewed"}
-                  </p>
-                </div>
-
-                {currentUser.profileReview.reviewedBy && (
-                  <div>
-                    <p className="text-sm font-medium text-arkus-navy mb-1">Reviewed By:</p>
-                    <p className="text-sm text-gray-600">{currentUser.profileReview.reviewedBy}</p>
-                  </div>
-                )}
-
-                {currentUser.profileReview.reviewNotes && (
-                  <div>
-                    <p className="text-sm font-medium text-arkus-navy mb-1">Review Notes:</p>
-                    <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-                      {currentUser.profileReview.reviewNotes}
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Right Column - Detailed Info */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* About Section */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy">About</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {isEditing ? (
-                  <div>
+            {/* Right Column - Detailed Information */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* About Section */}
+              <Card className="bg-white border border-gray-200">
+                <CardHeader>
+                  <CardTitle className="text-arkus-navy">About</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isEditing ? (
                     <Textarea
-                      value={editFormData.about}
-                      onChange={(e) => handleEditFormChange("about", e.target.value)}
-                      placeholder="Write a short summary about yourself (max 500 characters)"
-                      maxLength={500}
-                      rows={4}
-                      className="border-gray-300 focus:border-arkus-red focus:ring-arkus-red"
+                      value={editedUser.about || user.about || ""}
+                      onChange={(e) => setEditedUser({ ...editedUser, about: e.target.value })}
+                      placeholder="Tell us about yourself..."
+                      className="min-h-[100px]"
                     />
-                    <p className="text-xs text-gray-500 mt-1">{editFormData.about.length}/500 characters</p>
-                  </div>
-                ) : (
-                  <p className="text-gray-700">{currentUser.about}</p>
-                )}
-              </CardContent>
-            </Card>
+                  ) : (
+                    <p className="text-gray-600 leading-relaxed">
+                      {user.about || "No description provided."}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
 
-            {/* Current Assignment */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy flex items-center">
-                  <Briefcase className="h-5 w-5 mr-2" />
-                  Current Assignment
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {currentUser.workExperience
-                  .filter((exp) => exp.isCurrent)
-                  .map((experience, index) => (
-                    <div key={index} className="space-y-2">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-semibold text-arkus-navy">{experience.position}</h3>
-                          <p className="text-gray-600">{experience.company}</p>
+              {/* Technologies */}
+              {user.technologies && user.technologies.length > 0 && (
+                <Card className="bg-white border border-gray-200">
+                  <CardHeader>
+                    <CardTitle className="text-arkus-navy flex items-center">
+                      <User className="h-5 w-5 mr-2" />
+                      Technologies
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {user.technologies.map((tech, index) => (
+                        <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                          <span className="font-medium text-arkus-navy">{tech.technologies.name}</span>
+                          <Badge variant="outline" className="border-arkus-navy text-arkus-navy">
+                            {tech.level}
+                          </Badge>
                         </div>
-                        <div className="text-right text-sm text-gray-500">
-                          <div className="flex items-center">
-                            <Calendar className="h-4 w-4 mr-1" />
-                            {formatDate(experience.startDate)} - Present
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-gray-700">{experience.description}</p>
+                      ))}
                     </div>
-                  ))}
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+              )}
 
-            {/* Work Experience */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy flex items-center">
-                  <Briefcase className="h-5 w-5 mr-2" />
-                  Work Experience
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  {currentUser.projects.map((project, index) => (
-                    <div key={index} className="border-l-2 border-arkus-red pl-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h3 className="font-semibold text-arkus-navy">{project.name}</h3>
-                          <p className="text-gray-600">{project.client}</p>
+              {/* Skills */}
+              {user.skills && user.skills.length > 0 && (
+                <Card className="bg-white border border-gray-200">
+                  <CardHeader>
+                    <CardTitle className="text-arkus-navy flex items-center">
+                      <User className="h-5 w-5 mr-2" />
+                      Skills
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {user.skills.map((skill, index) => (
+                        <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                          <span className="font-medium text-arkus-navy">{skill.skill_name}</span>
+                          <Badge variant="outline" className="border-arkus-navy text-arkus-navy">
+                            {skill.level}
+                          </Badge>
                         </div>
-                        <div className="text-right text-sm text-gray-500">
-                          <div className="flex items-center">
-                            <Calendar className="h-4 w-4 mr-1" />
-                            {formatDate(project.startDate)} - {formatDate(project.endDate)}
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-gray-700">{project.description}</p>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Technologies */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy flex items-center">
-                  <Code className="h-5 w-5 mr-2" />
-                  Technologies
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {currentUser.technologies.map((tech, index) => (
-                    <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <span className="font-medium text-arkus-navy">{tech.name}</span>
-                      <Badge variant="outline" className="border-arkus-navy text-arkus-navy">
-                        {tech.level}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Skills */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy flex items-center">
-                  <Award className="h-5 w-5 mr-2" />
-                  Skills
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {currentUser.skills.map((skill, index) => (
-                    <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <span className="font-medium text-arkus-navy">{skill.name}</span>
-                      <Badge variant="outline" className="border-arkus-navy text-arkus-navy">
-                        {skill.level}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Education */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy flex items-center">
-                  <GraduationCap className="h-5 w-5 mr-2" />
-                  Education
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {currentUser.education.map((edu, index) => (
-                    <div key={index} className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-semibold text-arkus-navy">{edu.degreeTitle}</h3>
-                        <p className="text-gray-600">{edu.institutionName}</p>
-                      </div>
-                      <div className="text-right text-sm text-gray-500">
-                        <div className="flex items-center">
-                          <Calendar className="h-4 w-4 mr-1" />
-                          {formatDate(edu.graduationDate)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Languages */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy flex items-center">
-                  <Languages className="h-5 w-5 mr-2" />
-                  Languages
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {currentUser.languages.map((language, index) => (
-                    <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <span className="font-medium text-arkus-navy">{language.name}</span>
-                      <Badge variant="outline" className="border-arkus-navy text-arkus-navy">
-                        {language.proficiency}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Certifications */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy flex items-center">
-                  <Award className="h-5 w-5 mr-2" />
-                  Certifications
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {currentUser.certifications.map((cert, index) => (
-                    <div key={index} className="border-l-2 border-arkus-red pl-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h3 className="font-semibold text-arkus-navy">{cert.title}</h3>
-                          <p className="text-gray-600">{cert.issuer}</p>
-                        </div>
-                        <div className="text-right text-sm text-gray-500">
-                          <div className="flex items-center mb-1">
-                            <Calendar className="h-4 w-4 mr-1" />
-                            Issued: {formatDate(cert.issueDate)}
-                          </div>
-                          {cert.expirationDate && (
-                            <div className="flex items-center">
-                              <Calendar className="h-4 w-4 mr-1" />
-                              Expires: {formatDate(cert.expirationDate)}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      {cert.credentialUrl && (
-                        <a
-                          href={cert.credentialUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-arkus-red hover:text-arkus-red-hover text-sm"
-                        >
-                          View Credential →
-                        </a>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </div>
-        </div>
+        )}
+
+        {!loading && !error && !user && (
+          <Card className="bg-white border border-gray-200">
+            <CardContent className="p-12 text-center">
+              <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Profile not found</h3>
+              <p className="text-gray-600 mb-4">Your profile could not be loaded.</p>
+              <Button onClick={loadUser} className="bg-arkus-red text-white hover:bg-arkus-red-hover">
+                Try Again
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       </main>
     </div>
   )

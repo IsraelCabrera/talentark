@@ -1,145 +1,383 @@
 "use client"
 
-import {
-  ArrowLeft,
-  MapPin,
-  Globe,
-  Mail,
-  Calendar,
-  Award,
-  Code,
-  Briefcase,
-  GraduationCap,
-  Languages,
-  Download,
-  Users,
-} from "lucide-react"
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Progress } from "@/components/ui/progress"
+import { User, Mail, MapPin, Building2, Calendar, Globe, AlertTriangle, RefreshCw, ArrowLeft, Settings, CheckCircle, Award, Code, GraduationCap, Languages, Briefcase, Users, Star, Target, TrendingUp, ExternalLink, Clock, History, ChevronRight, UserCheck, FileText, Loader2 } from 'lucide-react'
 import Link from "next/link"
 import Image from "next/image"
-import { generateProfilePDF } from "@/lib/pdf-generator"
-import { useState } from "react"
+import { generatePDF, downloadPDF } from "@/lib/pdf-generator"
 
-// Mock data - in a real app, this would be fetched based on the ID
-const getUserData = (id: string) => {
-  const users = [
+interface Manager {
+  id: string
+  name: string
+  email: string
+  position: string
+}
+
+interface ArkusProject {
+  id: string
+  project_name: string
+  client_name: string
+  description: string
+  start_date: string
+  end_date: string | null
+  allocation_percentage: number
+  is_current: boolean
+  status?: string
+  team_size?: number
+}
+
+interface Certification {
+  id: string
+  title: string
+  issuer: string
+  issue_date: string
+  expiration_date: string | null
+  credential_url: string | null
+}
+
+interface Language {
+  id: string
+  language_name: string
+  proficiency_level: string
+}
+
+interface Technology {
+  level: string
+  technologies: { name: string }
+}
+
+interface Skill {
+  id: string
+  skill_name: string
+  level: string
+}
+
+interface Education {
+  id: string
+  degree_title: string
+  institution_name: string
+  graduation_date: string
+}
+
+interface UserProfile {
+  id: string
+  name: string
+  email: string
+  role: string
+  location?: string
+  english_level?: string
+  status: string
+  level: string
+  position?: string
+  company?: string
+  about?: string
+  reports_to?: string
+  employee_score?: number
+  company_score?: number
+  current_project_assignment?: string
+  current_project_id?: string
+  project_allocation_percentage?: number
+  created_at: string
+  updated_at: string
+  manager?: Manager
+  arkus_projects: ArkusProject[]
+  certifications: Certification[]
+  languages: Language[]
+  technologies: Technology[]
+  skills: Skill[]
+  education: Education[]
+}
+
+// Fixed Pie Chart Component with proper validation
+const PieChart = ({ percentage, size = 120 }: { percentage: number; size?: number }) => {
+  // Validate and sanitize inputs
+  const validPercentage = typeof percentage === 'number' && !isNaN(percentage) ? Math.max(0, Math.min(100, percentage)) : 0
+  const validSize = typeof size === 'number' && !isNaN(size) ? Math.max(60, size) : 120
+  
+  const radius = (validSize - 20) / 2
+  const circumference = 2 * Math.PI * radius
+  const strokeDasharray = circumference
+  const strokeDashoffset = circumference - (validPercentage / 100) * circumference
+  
+  return (
+    <div className="relative flex items-center justify-center" style={{ width: validSize, height: validSize }}>
+      <svg width={validSize} height={validSize} className="transform -rotate-90">
+        {/* Background circle */}
+        <circle
+          cx={validSize / 2}
+          cy={validSize / 2}
+          r={radius}
+          stroke="#e5e7eb"
+          strokeWidth="8"
+          fill="transparent"
+        />
+        {/* Progress circle */}
+        <circle
+          cx={validSize / 2}
+          cy={validSize / 2}
+          r={radius}
+          stroke="#dc2626"
+          strokeWidth="8"
+          fill="transparent"
+          strokeDasharray={strokeDasharray}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          className="transition-all duration-300 ease-in-out"
+        />
+      </svg>
+      {/* Center text */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-2xl font-bold text-slate-900">{validPercentage}%</div>
+          <div className="text-xs text-gray-500">Allocated</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Mock data for demonstration
+const mockUserData: UserProfile = {
+  id: "dca37910-61d0-474f-a7b5-6323aad275fa",
+  name: "Sarah Johnson",
+  email: "sarah.johnson@arkus.com",
+  role: "employee",
+  location: "Austin, TX",
+  english_level: "Native",
+  status: "available",
+  level: "Senior",
+  position: "Senior Frontend Developer",
+  company: "Arkus",
+  about: "Experienced frontend developer with 8+ years in React, TypeScript, and modern web technologies. Passionate about creating intuitive user experiences and mentoring junior developers. Led multiple successful project deliveries and contributed to the company's design system.",
+  reports_to: "manager-123",
+  employee_score: 92,
+  company_score: 8.5,
+  current_project_assignment: "E-Commerce Platform Redesign",
+  current_project_id: "project-ecommerce-2024",
+  project_allocation_percentage: 80,
+  created_at: "2022-03-15T00:00:00Z",
+  updated_at: "2024-01-15T00:00:00Z",
+  manager: {
+    id: "manager-123",
+    name: "Michael Chen",
+    email: "michael.chen@arkus.com",
+    position: "Engineering Manager"
+  },
+  arkus_projects: [
     {
-      id: 1,
-      name: "Sarah Johnson",
-      email: "sarah.johnson@arkus.com",
-      role: "employee",
-      location: "Tijuana, MX",
-      english_level: "Native",
-      status: "assigned",
-      level: "T4",
-      position: "Senior Full Stack Developer",
-      company: "Arkus",
-      about:
-        "Experienced full-stack developer with expertise in React and Node.js. Passionate about creating scalable web applications and mentoring junior developers.",
-      reportsTo: {
-        id: 2,
-        name: "Carlos Ruiz",
-        position: "Engineering Manager",
-        email: "carlos.ruiz@arkus.com",
-      },
-      workExperience: [
-        {
-          position: "Senior Full Stack Developer",
-          company: "Arkus",
-          startDate: "2023-01-15",
-          endDate: null,
-          description:
-            "Leading development of e-commerce platform using React and Node.js. Managing a team of 3 developers and collaborating with design and product teams.",
-          isCurrent: true,
-        },
-      ],
-      projects: [
-        {
-          name: "E-commerce Platform",
-          client: "RetailCorp",
-          description:
-            "Built a comprehensive e-commerce solution with React frontend and Node.js backend, handling 10k+ daily transactions.",
-          startDate: "2023-02-01",
-          endDate: "2023-08-15",
-        },
-        {
-          name: "CRM System",
-          client: "SalesTech",
-          description:
-            "Developed a customer relationship management system with advanced analytics and reporting features.",
-          startDate: "2022-09-01",
-          endDate: "2023-01-30",
-        },
-      ],
-      technologies: [
-        { name: "React", level: "Expert" },
-        { name: "Node.js", level: "Expert" },
-        { name: "PostgreSQL", level: "Advanced" },
-        { name: "TypeScript", level: "Expert" },
-        { name: "AWS", level: "Advanced" },
-        { name: "Docker", level: "Intermediate" },
-      ],
-      skills: [
-        { name: "Team Leadership", level: "Advanced" },
-        { name: "Project Management", level: "Intermediate" },
-        { name: "System Architecture", level: "Advanced" },
-        { name: "Code Review", level: "Expert" },
-        { name: "Mentoring", level: "Advanced" },
-        { name: "Agile Methodologies", level: "Advanced" },
-      ],
-      certifications: [
-        {
-          title: "AWS Solutions Architect",
-          issuer: "Amazon Web Services",
-          issueDate: "2023-03-15",
-          expirationDate: "2026-03-15",
-          credentialUrl: "https://aws.amazon.com/certification/",
-        },
-        {
-          title: "React Professional",
-          issuer: "Meta",
-          issueDate: "2022-11-20",
-          expirationDate: null,
-          credentialUrl: "https://developers.facebook.com/certification/",
-        },
-      ],
-      education: [
-        {
-          degreeTitle: "Bachelor of Computer Science",
-          institutionName: "Universidad de Guadalajara",
-          graduationDate: "2020-05-15",
-        },
-        {
-          degreeTitle: "AWS Cloud Practitioner",
-          institutionName: "Amazon Web Services",
-          graduationDate: "2022-08-10",
-        },
-      ],
-      languages: [
-        { name: "Spanish", proficiency: "Native" },
-        { name: "English", proficiency: "Native" },
-        { name: "Portuguese", proficiency: "Intermediate" },
-      ],
-      profileReview: {
-        lastReviewedDate: "2024-01-15",
-        approvalStatus: "approved",
-        reviewedBy: "Carlos Ruiz",
-        reviewNotes: "Profile is complete and up to date. All certifications verified.",
-        companyScore: 9,
-      },
-      profilePicture: "/images/profile-sarah.jpeg",
+      id: "project-ecommerce-2024",
+      project_name: "E-Commerce Platform Redesign",
+      client_name: "TechCorp Solutions",
+      description: "Complete redesign and modernization of the client's e-commerce platform using React and Node.js",
+      start_date: "2024-01-15",
+      end_date: null,
+      allocation_percentage: 80,
+      is_current: true,
+      status: "active",
+      team_size: 6
     },
+    {
+      id: "project-banking-2023",
+      project_name: "Banking Dashboard Modernization",
+      client_name: "SecureBank Corp",
+      description: "Modernized legacy banking dashboard with improved UX and security features",
+      start_date: "2023-06-01",
+      end_date: "2023-12-31",
+      allocation_percentage: 90,
+      is_current: false,
+      status: "completed",
+      team_size: 4
+    },
+    {
+      id: "project-healthcare-2023",
+      project_name: "Healthcare Management System",
+      client_name: "MedTech Solutions",
+      description: "Built comprehensive healthcare management system with patient portal and provider dashboard",
+      start_date: "2023-01-10",
+      end_date: "2023-05-30",
+      allocation_percentage: 75,
+      is_current: false,
+      status: "completed",
+      team_size: 8
+    }
+  ],
+  certifications: [
+    {
+      id: "cert-1",
+      title: "AWS Certified Solutions Architect",
+      issuer: "Amazon Web Services",
+      issue_date: "2023-08-15",
+      expiration_date: "2026-08-15",
+      credential_url: "https://aws.amazon.com/certification/"
+    },
+    {
+      id: "cert-2",
+      title: "React Professional Developer",
+      issuer: "Meta",
+      issue_date: "2023-03-20",
+      expiration_date: null,
+      credential_url: "https://developers.facebook.com/certification/"
+    }
+  ],
+  languages: [
+    {
+      id: "lang-1",
+      language_name: "English",
+      proficiency_level: "Native"
+    },
+    {
+      id: "lang-2",
+      language_name: "Spanish",
+      proficiency_level: "Intermediate"
+    },
+    {
+      id: "lang-3",
+      language_name: "French",
+      proficiency_level: "Beginner"
+    }
+  ],
+  technologies: [
+    {
+      level: "Expert",
+      technologies: { name: "React" }
+    },
+    {
+      level: "Expert",
+      technologies: { name: "TypeScript" }
+    },
+    {
+      level: "Advanced",
+      technologies: { name: "Node.js" }
+    },
+    {
+      level: "Advanced",
+      technologies: { name: "Next.js" }
+    },
+    {
+      level: "Intermediate",
+      technologies: { name: "Python" }
+    }
+  ],
+  skills: [
+    {
+      id: "skill-1",
+      skill_name: "Frontend Development",
+      level: "Expert"
+    },
+    {
+      id: "skill-2",
+      skill_name: "UI/UX Design",
+      level: "Advanced"
+    },
+    {
+      id: "skill-3",
+      skill_name: "Team Leadership",
+      level: "Advanced"
+    },
+    {
+      id: "skill-4",
+      skill_name: "Project Management",
+      level: "Intermediate"
+    }
+  ],
+  education: [
+    {
+      id: "edu-1",
+      degree_title: "Bachelor of Science in Computer Science",
+      institution_name: "University of Texas at Austin",
+      graduation_date: "2016-05-15"
+    }
   ]
-
-  return users.find((user) => user.id === Number.parseInt(id)) || users[0]
 }
 
 export default function ProfilePage({ params }: { params: { id: string } }) {
-  const user = getUserData(params.id)
-  const [isExporting, setIsExporting] = useState(false)
+  const [user, setUser] = useState<UserProfile | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [isExportingPDF, setIsExportingPDF] = useState(false)
+
+  useEffect(() => {
+    // Simulate loading
+    const timer = setTimeout(() => {
+      setUser(mockUserData)
+      setLoading(false)
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [params.id])
+
+  const handleExportPDF = async () => {
+    if (!user) return
+    
+    try {
+      setIsExportingPDF(true)
+      console.log("Starting PDF export for user:", user.name)
+      
+      const pdfBlob = await generatePDF(user)
+      const fileName = `${user.name.replace(/\s+/g, '_')}_Profile_${new Date().toISOString().split('T')[0]}.pdf`
+      
+      downloadPDF(pdfBlob, fileName)
+      
+      console.log("PDF export completed successfully")
+    } catch (error) {
+      console.error('Error generating PDF:', error)
+      // In a real app, you might want to show a toast notification here
+      alert('Failed to generate PDF. Please try again.')
+    } finally {
+      setIsExportingPDF(false)
+    }
+  }
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+  }
+
+  const getRoleDisplayName = (role: string) => {
+    const roleMap: Record<string, string> = {
+      employee: "Employee",
+      pm: "Project Manager",
+      hr: "Human Resources",
+      admin: "Administrator",
+    }
+    return roleMap[role] || role.charAt(0).toUpperCase() + role.slice(1)
+  }
+
+  const getStatusBadgeColor = (status: string) => {
+    return status === "available" ? "bg-green-100 text-green-800" : "bg-blue-100 text-blue-800"
+  }
+
+  const getProjectStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'active':
+      case 'in progress':
+        return "bg-green-100 text-green-800"
+      case 'completed':
+        return "bg-blue-100 text-blue-800"
+      case 'on hold':
+        return "bg-yellow-100 text-yellow-800"
+      case 'cancelled':
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const getScoreBadgeColor = (score: number) => {
+    if (score >= 90) return "bg-green-100 text-green-800"
+    if (score >= 80) return "bg-blue-100 text-blue-800"
+    if (score >= 70) return "bg-yellow-100 text-yellow-800"
+    return "bg-red-100 text-red-800"
+  }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -149,447 +387,567 @@ export default function ProfilePage({ params }: { params: { id: string } }) {
     })
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "approved":
-        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">✅ Approved</Badge>
-      case "needs_changes":
-        return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">❗ Needs Changes</Badge>
-      case "pending_review":
-        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">⏳ Pending Review</Badge>
-      default:
-        return null
-    }
+  const formatDateShort = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+    })
   }
 
-  const getCompanyScoreBadge = (score: number | null | undefined) => {
-    if (score === null || score === undefined) {
-      return (
-        <Badge variant="outline" className="border-gray-400 text-gray-600">
-          Not Scored
-        </Badge>
-      )
-    }
-
-    if (score >= 8) {
-      return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">⭐ {score}/10</Badge>
-    } else if (score >= 5) {
-      return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">⭐ {score}/10</Badge>
-    } else {
-      return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">⭐ {score}/10</Badge>
-    }
+  const getProficiencyColor = (level: string) => {
+    const levelLower = level.toLowerCase()
+    if (levelLower.includes('native') || levelLower.includes('fluent')) return "bg-green-100 text-green-800"
+    if (levelLower.includes('advanced') || levelLower.includes('proficient')) return "bg-blue-100 text-blue-800"
+    if (levelLower.includes('intermediate')) return "bg-yellow-100 text-yellow-800"
+    return "bg-gray-100 text-gray-800"
   }
 
-  const handleExportPDF = async () => {
-    setIsExporting(true)
-    try {
-      // Add a small delay to show loading state
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      generateProfilePDF(user)
-    } catch (error) {
-      console.error("Error generating PDF:", error)
-      alert("Error generating PDF. Please try again.")
-    } finally {
-      setIsExporting(false)
-    }
+  const calculateProjectDuration = (startDate: string, endDate: string | null) => {
+    const start = new Date(startDate)
+    const end = endDate ? new Date(endDate) : new Date()
+    const diffTime = Math.abs(end.getTime() - start.getTime())
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    const diffMonths = Math.floor(diffDays / 30)
+    
+    if (diffMonths < 1) return `${diffDays} days`
+    if (diffMonths < 12) return `${diffMonths} month${diffMonths > 1 ? 's' : ''}`
+    const years = Math.floor(diffMonths / 12)
+    const remainingMonths = diffMonths % 12
+    return `${years} year${years > 1 ? 's' : ''}${remainingMonths > 0 ? ` ${remainingMonths} month${remainingMonths > 1 ? 's' : ''}` : ''}`
   }
 
   return (
-    <div className="min-h-screen bg-arkus-gray">
-      {/* Header */}
-      <header className="bg-arkus-navy border-b border-gray-300">
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-slate-900 border-b border-gray-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
-              <Image src="/images/arkus-logo.png" alt="Arkus Logo" width={40} height={40} className="mr-3" />
+              <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center mr-3">
+                <span className="text-white font-bold text-lg">T</span>
+              </div>
               <div>
-                <h1 className="text-2xl font-bold text-white">{user.name}</h1>
-                <p className="text-sm text-gray-300">{user.position}</p>
+                <h1 className="text-2xl font-bold text-white">TalentArk</h1>
+                <p className="text-sm text-gray-300">Employee Profile</p>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <Button
-                onClick={handleExportPDF}
-                disabled={isExporting}
-                className="bg-arkus-red text-white hover:bg-arkus-red-hover"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                {isExporting ? "Generating PDF..." : "Export PDF"}
-              </Button>
-              <Link href="/">
-                <Button
-                  variant="outline"
-                  className="border-white text-white hover:bg-white hover:text-arkus-navy bg-transparent"
-                >
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Directory
-                </Button>
+            <nav className="hidden md:flex space-x-8">
+              <Link href="/" className="text-gray-300 hover:text-white transition-colors">
+                Dashboard
               </Link>
-            </div>
+              <Link href="/analytics" className="text-gray-300 hover:text-white transition-colors">
+                Analytics
+              </Link>
+              <Link href="/org-chart" className="text-gray-300 hover:text-white transition-colors">
+                Org Chart
+              </Link>
+              <Link href="/import" className="text-gray-300 hover:text-white transition-colors">
+                Import
+              </Link>
+            </nav>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Basic Info */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* Profile Card */}
-            <Card className="border-gray-200">
-              <CardContent className="p-6">
-                <div className="text-center">
-                  <Avatar className="h-24 w-24 mx-auto mb-4">
-                    <AvatarImage
-                      src={
-                        user.profilePicture ||
-                        `/placeholder.svg?height=96&width=96&text=${user.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}`
-                      }
-                    />
-                    <AvatarFallback className="bg-arkus-red text-white text-2xl">
-                      {user.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                  <h2 className="text-2xl font-bold text-arkus-navy mb-1">{user.name}</h2>
-                  <p className="text-gray-600 mb-4">{user.position}</p>
+        <div className="mb-6 flex justify-between items-center">
+          <Link href="/">
+            <Button
+              variant="outline"
+              className="border-slate-900 text-slate-900 hover:bg-slate-900 hover:text-white bg-transparent"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Dashboard
+            </Button>
+          </Link>
 
-                  <div className="flex justify-center gap-2 mb-4">
-                    <Badge
-                      variant={user.status === "available" ? "default" : "secondary"}
-                      className={`${
-                        user.status === "available"
-                          ? "bg-arkus-red text-white hover:bg-arkus-red-hover"
-                          : "bg-gray-200 text-arkus-navy hover:bg-gray-300"
-                      }`}
-                    >
-                      {user.status === "available" ? "Available" : "Assigned"}
-                    </Badge>
-                    <Badge variant="outline" className="border-arkus-navy text-arkus-navy">
-                      {user.level}
-                    </Badge>
-                  </div>
+          {user && (
+            <Button
+              onClick={handleExportPDF}
+              disabled={isExportingPDF}
+              variant="outline"
+              className="border-slate-900 text-slate-900 hover:bg-slate-900 hover:text-white bg-transparent"
+            >
+              {isExportingPDF ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Generating PDF...
+                </>
+              ) : (
+                <>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Export PDF
+                </>
+              )}
+            </Button>
+          )}
+        </div>
 
-                  <div className="space-y-2 text-sm text-gray-600">
-                    <div className="flex items-center justify-center">
-                      <Mail className="h-4 w-4 mr-2" />
-                      {user.email}
-                    </div>
-                    <div className="flex items-center justify-center">
-                      <MapPin className="h-4 w-4 mr-2" />
-                      {user.location}
-                    </div>
-                    <div className="flex items-center justify-center">
-                      <Globe className="h-4 w-4 mr-2" />
-                      English: {user.english_level}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+        {loading && (
+          <Card className="bg-white border border-gray-200">
+            <CardContent className="p-12 text-center">
+              <RefreshCw className="h-8 w-8 animate-spin text-red-600 mx-auto mb-4" />
+              <p className="text-gray-600">Loading employee profile...</p>
+            </CardContent>
+          </Card>
+        )}
 
-            {/* Reports To Card */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy flex items-center">
-                  <Users className="h-5 w-5 mr-2" />
-                  Reports To
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {user.reportsTo ? (
-                  <div className="flex items-center space-x-3">
-                    <Avatar className="h-10 w-10">
-                      <AvatarImage
-                        src={`/placeholder.svg?height=40&width=40&text=${user.reportsTo.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}`}
-                      />
-                      <AvatarFallback className="bg-arkus-red text-white text-sm">
-                        {user.reportsTo.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
+        {!loading && !error && user && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left Column - Profile Overview */}
+            <div className="lg:col-span-1 space-y-6">
+              {/* Basic Profile Card */}
+              <Card className="bg-white border border-gray-200">
+                <CardContent className="p-6">
+                  <div className="text-center mb-6">
+                    <Avatar className="h-24 w-24 mx-auto mb-4">
+                      <AvatarImage src="/placeholder.svg?height=96&width=96&text=SJ" alt={user.name} />
+                      <AvatarFallback className="bg-red-600 text-white text-xl">
+                        {getInitials(user.name)}
                       </AvatarFallback>
                     </Avatar>
-                    <div>
-                      <p className="font-medium text-arkus-navy">{user.reportsTo.name}</p>
-                      <p className="text-sm text-gray-600">{user.reportsTo.position}</p>
-                      <p className="text-xs text-gray-500">{user.reportsTo.email}</p>
+                    <h2 className="text-2xl font-bold text-slate-900 mb-2">{user.name}</h2>
+                    <p className="text-gray-600 mb-4">{user.position || getRoleDisplayName(user.role)}</p>
+                    <div className="flex justify-center gap-2 mb-4">
+                      <Badge className={`${getStatusBadgeColor(user.status)}`}>
+                        {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
+                      </Badge>
+                      <Badge variant="outline">{user.level}</Badge>
                     </div>
                   </div>
-                ) : (
-                  <p className="text-gray-500 text-sm">No supervisor assigned</p>
-                )}
-              </CardContent>
-            </Card>
 
-            {/* Profile Review Status */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy flex items-center">
-                  <Award className="h-5 w-5 mr-2" />
-                  Profile Review Status
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <p className="text-sm font-medium text-arkus-navy mb-1">Status:</p>
-                  {getStatusBadge(user.profileReview.approvalStatus)}
-                </div>
-
-                <div>
-                  <p className="text-sm font-medium text-arkus-navy mb-1">Company Score:</p>
-                  {getCompanyScoreBadge(user.profileReview.companyScore)}
-                </div>
-
-                <div>
-                  <p className="text-sm font-medium text-arkus-navy mb-1">Last Reviewed:</p>
-                  <p className="text-sm text-gray-600">
-                    {user.profileReview.lastReviewedDate
-                      ? formatDate(user.profileReview.lastReviewedDate)
-                      : "Never reviewed"}
-                  </p>
-                </div>
-
-                {user.profileReview.reviewedBy && (
-                  <div>
-                    <p className="text-sm font-medium text-arkus-navy mb-1">Reviewed By:</p>
-                    <p className="text-sm text-gray-600">{user.profileReview.reviewedBy}</p>
+                  <div className="space-y-4">
+                    <div className="flex items-center text-sm">
+                      <Mail className="h-4 w-4 mr-3 text-gray-400" />
+                      <span className="text-gray-600">{user.email}</span>
+                    </div>
+                    
+                    <div className="flex items-center text-sm">
+                      <Building2 className="h-4 w-4 mr-3 text-gray-400" />
+                      <span className="text-gray-600">{getRoleDisplayName(user.role)}</span>
+                    </div>
+                    {user.location && (
+                      <div className="flex items-center text-sm">
+                        <MapPin className="h-4 w-4 mr-3 text-gray-400" />
+                        <span className="text-gray-600">{user.location}</span>
+                      </div>
+                    )}
+                    {user.english_level && (
+                      <div className="flex items-center text-sm">
+                        <Globe className="h-4 w-4 mr-3 text-gray-400" />
+                        <span className="text-gray-600">English: {user.english_level}</span>
+                      </div>
+                    )}
+                    
+                    {/* Reports To Section */}
+                    {user.manager ? (
+                      <div className="flex items-center text-sm">
+                        <Users className="h-4 w-4 mr-3 text-gray-400" />
+                        <span className="text-gray-600">
+                          Reports to: 
+                          <Link href={`/profile/${user.manager.id}`} className="text-red-600 hover:text-red-700 ml-1 font-medium">
+                            {user.manager.name}
+                          </Link>
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center text-sm">
+                        <Users className="h-4 w-4 mr-3 text-gray-400" />
+                        <span className="text-gray-600">Reports to: None</span>
+                      </div>
+                    )}
+                    
+                    <div className="flex items-center text-sm">
+                      <Calendar className="h-4 w-4 mr-3 text-gray-400" />
+                      <span className="text-gray-600">Joined {formatDate(user.created_at)}</span>
+                    </div>
                   </div>
-                )}
+                </CardContent>
+              </Card>
 
-                {user.profileReview.reviewNotes && (
-                  <div>
-                    <p className="text-sm font-medium text-arkus-navy mb-1">Review Notes:</p>
-                    <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">{user.profileReview.reviewNotes}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+              {/* Employee Score Card */}
+              {user.employee_score && (
+                <Card className="bg-white border border-gray-200">
+                  <CardHeader>
+                    <CardTitle className="text-lg text-slate-900 flex items-center">
+                      <Star className="h-5 w-5 mr-2" />
+                      Employee Score
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-slate-900 mb-2">{user.employee_score}/100</div>
+                      <Badge className={`${getScoreBadgeColor(user.employee_score)}`}>
+                        {user.employee_score >= 90
+                          ? "Excellent"
+                          : user.employee_score >= 80
+                          ? "Good"
+                          : user.employee_score >= 70
+                          ? "Average"
+                          : "Needs Improvement"}
+                      </Badge>
+                      <Progress value={user.employee_score} className="mt-3" />
+                      <p className="text-xs text-gray-500 mt-2">Individual performance rating</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
-          {/* Right Column - Detailed Info */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* About Section */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy">About</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-700">{user.about}</p>
-              </CardContent>
-            </Card>
-
-            {/* Current Assignment */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy flex items-center">
-                  <Briefcase className="h-5 w-5 mr-2" />
-                  Current Assignment
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {user.workExperience
-                  .filter((exp) => exp.isCurrent)
-                  .map((experience, index) => (
-                    <div key={index} className="space-y-2">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-semibold text-arkus-navy">{experience.position}</h3>
-                          <p className="text-gray-600">{experience.company}</p>
+              {/* Project Assignment Pie Chart Card */}
+              {user.project_allocation_percentage && (
+                <Card className="bg-white border border-gray-200">
+                  <CardHeader>
+                    <CardTitle className="text-lg text-slate-900 flex items-center">
+                      <Clock className="h-5 w-5 mr-2" />
+                      Project Assignment
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-col items-center">
+                      <PieChart percentage={user.project_allocation_percentage || 0} />
+                      <div className="mt-4 text-center">
+                        <Badge variant="outline" className="border-slate-900 text-slate-900">
+                          Current Allocation
+                        </Badge>
+                        <p className="text-xs text-gray-500 mt-2">Time allocated to current projects</p>
+                        <div className="flex items-center justify-center mt-2 text-sm text-gray-600">
+                          <div className="w-3 h-3 bg-red-600 rounded-full mr-2"></div>
+                          <span>Allocated ({user.project_allocation_percentage || 0}%)</span>
+                          <div className="w-3 h-3 bg-gray-200 rounded-full ml-4 mr-2"></div>
+                          <span>Available ({100 - (user.project_allocation_percentage || 0)}%)</span>
                         </div>
-                        <div className="text-right text-sm text-gray-500">
-                          <div className="flex items-center">
-                            <Calendar className="h-4 w-4 mr-1" />
-                            {formatDate(experience.startDate)} - Present
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            {/* Right Column - Detailed Information */}
+            <div className="lg:col-span-2 space-y-6">
+              {user.about && (
+                <Card className="bg-white border border-gray-200">
+                  <CardHeader>
+                    <CardTitle className="text-slate-900">About</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-gray-600 leading-relaxed">{user.about}</p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Current Arkus Project Assignment - Enhanced Clickable Version */}
+              {user.current_project_assignment && (
+                <Card className="bg-white border border-gray-200 hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <CardTitle className="text-slate-900 flex items-center">
+                      <Target className="h-5 w-5 mr-2" />
+                      Current Project Assignment
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Link 
+                      href={`/projects/${user.current_project_id || 'current'}/team`}
+                      className="block hover:bg-gray-50 p-4 rounded-lg transition-colors border border-gray-100"
+                    >
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <h3 className="font-semibold text-slate-900 text-lg hover:text-red-600 transition-colors">
+                              {user.current_project_assignment}
+                            </h3>
+                            <ChevronRight className="h-5 w-5 text-gray-400" />
+                          </div>
+                          <div className="flex items-center gap-2 mt-2">
+                            <Badge className="bg-green-100 text-green-800">Active</Badge>
+                            {user.project_allocation_percentage && (
+                              <Badge variant="outline" className="border-slate-900 text-slate-900">
+                                {user.project_allocation_percentage}% Allocation
+                              </Badge>
+                            )}
                           </div>
                         </div>
                       </div>
-                      <p className="text-gray-700">{experience.description}</p>
-                    </div>
-                  ))}
-              </CardContent>
-            </Card>
+                      
+                      <div className="flex items-center text-sm text-gray-600 mb-3">
+                        <UserCheck className="h-4 w-4 mr-2" />
+                        <span>Click to view team members assigned to this project</span>
+                      </div>
 
-            {/* Work Experience */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy flex items-center">
-                  <Briefcase className="h-5 w-5 mr-2" />
-                  Work Experience
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  {user.projects.map((project, index) => (
-                    <div key={index} className="border-l-2 border-arkus-red pl-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h3 className="font-semibold text-arkus-navy">{project.name}</h3>
-                          <p className="text-gray-600">{project.client}</p>
-                        </div>
-                        <div className="text-right text-sm text-gray-500">
-                          <div className="flex items-center">
-                            <Calendar className="h-4 w-4 mr-1" />
-                            {formatDate(project.startDate)} - {formatDate(project.endDate)}
+                      {user.project_allocation_percentage && (
+                        <div className="mt-3">
+                          <div className="flex justify-between text-sm mb-1">
+                            <span className="text-gray-600">Project Allocation</span>
+                            <span className="text-slate-900 font-medium">{user.project_allocation_percentage}%</span>
                           </div>
+                          <Progress value={user.project_allocation_percentage} className="h-2" />
                         </div>
-                      </div>
-                      <p className="text-gray-700">{project.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                      )}
+                    </Link>
+                  </CardContent>
+                </Card>
+              )}
 
-            {/* Technologies */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy flex items-center">
-                  <Code className="h-5 w-5 mr-2" />
-                  Technologies
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {user.technologies.map((tech, index) => (
-                    <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <span className="font-medium text-arkus-navy">{tech.name}</span>
-                      <Badge variant="outline" className="border-arkus-navy text-arkus-navy">
-                        {tech.level}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Skills */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy flex items-center">
-                  <Award className="h-5 w-5 mr-2" />
-                  Skills
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {user.skills.map((skill, index) => (
-                    <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <span className="font-medium text-arkus-navy">{skill.name}</span>
-                      <Badge variant="outline" className="border-arkus-navy text-arkus-navy">
-                        {skill.level}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Education */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy flex items-center">
-                  <GraduationCap className="h-5 w-5 mr-2" />
-                  Education
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {user.education.map((edu, index) => (
-                    <div key={index} className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-semibold text-arkus-navy">{edu.degreeTitle}</h3>
-                        <p className="text-gray-600">{edu.institutionName}</p>
-                      </div>
-                      <div className="text-right text-sm text-gray-500">
-                        <div className="flex items-center">
-                          <Calendar className="h-4 w-4 mr-1" />
-                          {formatDate(edu.graduationDate)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Languages */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy flex items-center">
-                  <Languages className="h-5 w-5 mr-2" />
-                  Languages
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {user.languages.map((language, index) => (
-                    <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <span className="font-medium text-arkus-navy">{language.name}</span>
-                      <Badge variant="outline" className="border-arkus-navy text-arkus-navy">
-                        {language.proficiency}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Certifications */}
-            <Card className="border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-arkus-navy flex items-center">
-                  <Award className="h-5 w-5 mr-2" />
-                  Certifications
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {user.certifications.map((cert, index) => (
-                    <div key={index} className="border-l-2 border-arkus-red pl-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h3 className="font-semibold text-arkus-navy">{cert.title}</h3>
-                          <p className="text-gray-600">{cert.issuer}</p>
-                        </div>
-                        <div className="text-right text-sm text-gray-500">
-                          <div className="flex items-center mb-1">
-                            <Calendar className="h-4 w-4 mr-1" />
-                            Issued: {formatDate(cert.issueDate)}
-                          </div>
-                          {cert.expirationDate && (
-                            <div className="flex items-center">
-                              <Calendar className="h-4 w-4 mr-1" />
-                              Expires: {formatDate(cert.expirationDate)}
+              {/* Previous Projects - Enhanced History */}
+              {user.arkus_projects && user.arkus_projects.length > 0 && (
+                <Card className="bg-white border border-gray-200">
+                  <CardHeader>
+                    <CardTitle className="text-slate-900 flex items-center">
+                      <History className="h-5 w-5 mr-2" />
+                      Previous Projects History
+                    </CardTitle>
+                    <CardDescription>
+                      Complete history of Arkus projects and assignments
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-6">
+                      {user.arkus_projects
+                        .sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime())
+                        .map((project, index) => (
+                        <div key={index} className="relative">
+                          {/* Timeline connector */}
+                          {index < user.arkus_projects.length - 1 && (
+                            <div className="absolute left-3 top-8 w-0.5 h-16 bg-gray-200"></div>
+                          )}
+                          
+                          <div className="flex items-start space-x-4">
+                            {/* Timeline dot */}
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-1 ${
+                              project.is_current ? 'bg-green-500' : 'bg-gray-300'
+                            }`}>
+                              <div className="w-2 h-2 bg-white rounded-full"></div>
                             </div>
+                            
+                            {/* Project content */}
+                            <div className="flex-1 min-w-0">
+                              <Link 
+                                href={`/projects/${project.id}/team`}
+                                className="block hover:bg-gray-50 p-4 rounded-lg transition-colors border border-gray-100 hover:border-red-600"
+                              >
+                                <div className="flex justify-between items-start mb-2">
+                                  <div className="flex-1">
+                                    <div className="flex items-center justify-between">
+                                      <h3 className="font-semibold text-slate-900 hover:text-red-600 transition-colors">
+                                        {project.project_name}
+                                      </h3>
+                                      <ChevronRight className="h-4 w-4 text-gray-400" />
+                                    </div>
+                                    <p className="text-gray-600 text-sm">{project.client_name}</p>
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2 mb-3">
+                                  {project.is_current && (
+                                    <Badge className="bg-green-100 text-green-800 text-xs">Current</Badge>
+                                  )}
+                                  <Badge className={`text-xs ${getProjectStatusColor(project.status || 'completed')}`}>
+                                    {project.status || 'Completed'}
+                                  </Badge>
+                                  <Badge variant="outline" className="border-slate-900 text-slate-900 text-xs">
+                                    {project.allocation_percentage}% Allocation
+                                  </Badge>
+                                  {project.team_size && (
+                                    <Badge variant="outline" className="text-xs">
+                                      {project.team_size} team members
+                                    </Badge>
+                                  )}
+                                </div>
+
+                                <p className="text-gray-700 text-sm mb-3">{project.description}</p>
+
+                                <div className="flex items-center justify-between text-xs text-gray-500">
+                                  <div className="flex items-center">
+                                    <Calendar className="h-3 w-3 mr-1" />
+                                    <span>
+                                      {formatDateShort(project.start_date)} - {" "}
+                                      {project.end_date ? formatDateShort(project.end_date) : "Present"}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center">
+                                    <Clock className="h-3 w-3 mr-1" />
+                                    <span>Duration: {calculateProjectDuration(project.start_date, project.end_date)}</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center text-xs text-gray-600 mt-2">
+                                  <UserCheck className="h-3 w-3 mr-1" />
+                                  <span>Click to view project team</span>
+                                </div>
+                              </Link>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Certifications */}
+              {user.certifications && user.certifications.length > 0 && (
+                <Card className="bg-white border border-gray-200">
+                  <CardHeader>
+                    <CardTitle className="text-slate-900 flex items-center">
+                      <Award className="h-5 w-5 mr-2" />
+                      Professional Certifications
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {user.certifications.map((cert, index) => (
+                        <div key={index} className="border-l-2 border-red-600 pl-4">
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <h3 className="font-semibold text-slate-900">{cert.title}</h3>
+                              <p className="text-gray-600">{cert.issuer}</p>
+                            </div>
+                            <div className="text-right text-sm text-gray-500">
+                              <div className="flex items-center mb-1">
+                                <Calendar className="h-4 w-4 mr-1" />
+                                Issued: {formatDateShort(cert.issue_date)}
+                              </div>
+                              {cert.expiration_date && (
+                                <div className="flex items-center">
+                                  <Calendar className="h-4 w-4 mr-1" />
+                                  Expires: {formatDateShort(cert.expiration_date)}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {cert.credential_url && (
+                            <a
+                              href={cert.credential_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-red-600 hover:text-red-700 text-sm flex items-center"
+                            >
+                              View Credential <ExternalLink className="h-3 w-3 ml-1" />
+                            </a>
                           )}
                         </div>
-                      </div>
-                      {cert.credentialUrl && (
-                        <a
-                          href={cert.credentialUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-arkus-red hover:text-arkus-red-hover text-sm"
-                        >
-                          View Credential →
-                        </a>
-                      )}
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Languages */}
+              {user.languages && user.languages.length > 0 && (
+                <Card className="bg-white border border-gray-200">
+                  <CardHeader>
+                    <CardTitle className="text-slate-900 flex items-center">
+                      <Languages className="h-5 w-5 mr-2" />
+                      Languages & Proficiency
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {user.languages.map((language, index) => (
+                        <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                          <span className="font-medium text-slate-900">{language.language_name}</span>
+                          <Badge className={`${getProficiencyColor(language.proficiency_level)}`}>
+                            {language.proficiency_level}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Technologies */}
+              {user.technologies && user.technologies.length > 0 && (
+                <Card className="bg-white border border-gray-200">
+                  <CardHeader>
+                    <CardTitle className="text-slate-900 flex items-center">
+                      <Code className="h-5 w-5 mr-2" />
+                      Technologies
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {user.technologies.map((tech, index) => (
+                        <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                          <span className="font-medium text-slate-900">{tech.technologies.name}</span>
+                          <Badge variant="outline" className="border-slate-900 text-slate-900">
+                            {tech.level}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Skills */}
+              {user.skills && user.skills.length > 0 && (
+                <Card className="bg-white border border-gray-200">
+                  <CardHeader>
+                    <CardTitle className="text-slate-900 flex items-center">
+                      <Award className="h-5 w-5 mr-2" />
+                      Skills
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {user.skills.map((skill, index) => (
+                        <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                          <span className="font-medium text-slate-900">{skill.skill_name}</span>
+                          <Badge variant="outline" className="border-slate-900 text-slate-900">
+                            {skill.level}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Education */}
+              {user.education && user.education.length > 0 && (
+                <Card className="bg-white border border-gray-200">
+                  <CardHeader>
+                    <CardTitle className="text-slate-900 flex items-center">
+                      <GraduationCap className="h-5 w-5 mr-2" />
+                      Education
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {user.education.map((edu, index) => (
+                        <div key={index} className="flex justify-between items-start">
+                          <div>
+                            <h3 className="font-semibold text-slate-900">{edu.degree_title}</h3>
+                            <p className="text-gray-600">{edu.institution_name}</p>
+                          </div>
+                          <div className="text-right text-sm text-gray-500">
+                            <div className="flex items-center">
+                              <Calendar className="h-4 w-4 mr-1" />
+                              {formatDate(edu.graduation_date)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </div>
-        </div>
+        )}
+
+        {!loading && !error && !user && (
+          <Card className="bg-white border border-gray-200">
+            <CardContent className="p-12 text-center">
+              <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Employee not found</h3>
+              <p className="text-gray-600 mb-4">The requested employee profile could not be found.</p>
+              <Link href="/">
+                <Button className="bg-red-600 text-white hover:bg-red-700">Back to Dashboard</Button>
+              </Link>
+            </CardContent>
+          </Card>
+        )}
       </main>
     </div>
   )
