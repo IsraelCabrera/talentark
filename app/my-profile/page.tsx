@@ -1,1301 +1,1084 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Separator } from "@/components/ui/separator"
-import { User, Mail, Phone, MapPin, Building2, Calendar, Star, Edit, Save, X, Plus, Trash2, Send, Award, GraduationCap, Globe, Code, CheckCircle, AlertCircle, Camera } from 'lucide-react'
-import Link from "next/link"
+import {
+  Edit3,
+  Save,
+  X,
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  Calendar,
+  Building,
+  Star,
+  Award,
+  Briefcase,
+  GraduationCap,
+  Globe,
+  Code,
+  Plus,
+  Trash2,
+  CheckCircle,
+  AlertCircle,
+} from "lucide-react"
+import { getCurrentUser, updateUserProfile } from "@/lib/auth"
+import type { User as AuthUser } from "@/lib/auth"
 
-interface Certification {
-  id: string
-  name: string
-  issuer: string
-  issueDate: string
-  expiryDate?: string
-  credentialUrl?: string
-}
+const availableProjects = [
+  { id: "proj_001", name: "System Infrastructure Management", client: "Internal", status: "Active" },
+  { id: "proj_002", name: "Employee Development Program", client: "HR Department", status: "Active" },
+  { id: "proj_003", name: "E-Commerce Platform Development", client: "RetailCorp", status: "Active" },
+  { id: "proj_004", name: "Mobile App Development", client: "TechStart Inc", status: "Active" },
+  { id: "proj_005", name: "Data Analytics Dashboard", client: "FinanceFlow", status: "Active" },
+  { id: "proj_006", name: "Cloud Migration Project", client: "LegacySoft", status: "Planning" },
+  { id: "proj_007", name: "Security Audit & Compliance", client: "SecureBank", status: "Planning" },
+  { id: "proj_008", name: "AI Integration Platform", client: "InnovateTech", status: "Planning" },
+]
 
-interface Language {
-  id: string
-  name: string
-  proficiency: 'Beginner' | 'Intermediate' | 'Advanced' | 'Fluent' | 'Native'
-}
+const proficiencyLevels = ["Native", "Professional", "Conversational", "Basic"]
 
-interface Skill {
-  id: string
-  name: string
-  level: 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert'
-}
-
-interface Education {
-  id: string
-  degree: string
-  institution: string
-  graduationDate: string
-  gpa?: string
-}
-
-interface PreviousProject {
-  id: string
-  name: string
-  client: string
-  description: string
-  startDate: string
-  endDate: string
-  role: string
-  technologies: string[]
-  teamSize: number
-  status: 'completed' | 'cancelled' | 'on-hold'
-}
-
-interface ProfileData {
-  id: string
-  name: string
-  email: string
-  phone: string
-  position: string
-  location: string
-  about: string
-  employee_score: number
-  project_allocation_percentage: number
-  current_project: string
-  manager_name: string
-  manager_email: string
-  hire_date: string
-  level: string
-  department: string
-  avatar?: string
-  last_review_submission: string | null
-  last_review_approval: string | null
-  certifications: Certification[]
-  languages: Language[]
-  skills: Skill[]
-  education: Education[]
-  previous_projects: PreviousProject[]
-}
-
-export default function MyProfile() {
-  const [profile, setProfile] = useState<ProfileData | null>(null)
-  const [editMode, setEditMode] = useState(false)
-  const [hasChanges, setHasChanges] = useState(false)
+export default function MyProfilePage() {
+  const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [showReviewDialog, setShowReviewDialog] = useState(false)
-  const [reviewMessage, setReviewMessage] = useState("")
-  const [showAddDialog, setShowAddDialog] = useState<string | null>(null)
-
-  // Form states for adding new items
-  const [newCertification, setNewCertification] = useState<Partial<Certification>>({})
-  const [newLanguage, setNewLanguage] = useState<Partial<Language>>({})
-  const [newSkill, setNewSkill] = useState<Partial<Skill>>({})
-  const [newEducation, setNewEducation] = useState<Partial<Education>>({})
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
+  const [editedUser, setEditedUser] = useState<AuthUser | null>(null)
+  const router = useRouter()
 
   useEffect(() => {
-    // Mock profile data - in real app, fetch from API
-    const mockProfile: ProfileData = {
-      id: "current-user",
-      name: "Alex Thompson",
-      email: "alex.thompson@arkus.com",
-      phone: "+1 (555) 123-4567",
-      position: "Senior Full Stack Developer",
-      location: "Austin, TX",
-      about: "Passionate full-stack developer with 8+ years of experience building scalable web applications. Specialized in React, Node.js, and cloud architecture. Love mentoring junior developers and contributing to open-source projects.",
-      employee_score: 94,
-      project_allocation_percentage: 85,
-      current_project: "E-Commerce Platform Redesign",
-      manager_name: "Sarah Johnson",
-      manager_email: "sarah.johnson@arkus.com",
-      hire_date: "2019-03-15",
-      level: "Senior",
-      department: "Engineering",
-      last_review_submission: "2023-12-20T14:45:00Z",
-      last_review_approval: "2023-12-22T09:15:00Z",
-      certifications: [
-        {
-          id: "cert-1",
-          name: "AWS Solutions Architect Professional",
-          issuer: "Amazon Web Services",
-          issueDate: "2023-06-15",
-          expiryDate: "2026-06-15",
-          credentialUrl: "https://aws.amazon.com/verification"
-        },
-        {
-          id: "cert-2",
-          name: "Google Cloud Professional Developer",
-          issuer: "Google Cloud",
-          issueDate: "2023-03-20",
-          expiryDate: "2025-03-20"
+    const loadUser = async () => {
+      try {
+        const currentUser = await getCurrentUser()
+        if (!currentUser) {
+          router.push("/")
+          return
         }
-      ],
-      languages: [
-        { id: "lang-1", name: "English", proficiency: "Native" },
-        { id: "lang-2", name: "Spanish", proficiency: "Intermediate" },
-        { id: "lang-3", name: "French", proficiency: "Beginner" }
-      ],
-      skills: [
-        { id: "skill-1", name: "React", level: "Expert" },
-        { id: "skill-2", name: "Node.js", level: "Expert" },
-        { id: "skill-3", name: "TypeScript", level: "Advanced" },
-        { id: "skill-4", name: "AWS", level: "Advanced" },
-        { id: "skill-5", name: "Docker", level: "Intermediate" },
-        { id: "skill-6", name: "Kubernetes", level: "Intermediate" }
-      ],
-      education: [
-        {
-          id: "edu-1",
-          degree: "Bachelor of Science in Computer Science",
-          institution: "University of Texas at Austin",
-          graduationDate: "2016-05-15",
-          gpa: "3.8"
-        }
-      ],
-      previous_projects: [
-        {
-          id: "proj-1",
-          name: "E-Commerce Platform Redesign",
-          client: "TechCorp Solutions",
-          description: "Complete redesign and modernization of the client's e-commerce platform using React and Node.js. Implemented new payment gateway integration and improved user experience.",
-          startDate: "2023-08-01",
-          endDate: "2024-01-15",
-          role: "Lead Frontend Developer",
-          technologies: ["React", "TypeScript", "Node.js", "PostgreSQL", "AWS"],
-          teamSize: 6,
-          status: "completed"
-        },
-        {
-          id: "proj-2",
-          name: "Banking Dashboard Modernization",
-          client: "SecureBank Corp",
-          description: "Modernized legacy banking dashboard with improved UX and security features. Implemented real-time transaction monitoring and enhanced reporting capabilities.",
-          startDate: "2023-01-10",
-          endDate: "2023-07-30",
-          role: "Full Stack Developer",
-          technologies: ["Vue.js", "Python", "Django", "MySQL", "Docker"],
-          teamSize: 4,
-          status: "completed"
-        },
-        {
-          id: "proj-3",
-          name: "Healthcare Management System",
-          client: "MedTech Solutions",
-          description: "Built comprehensive healthcare management system with patient portal and provider dashboard. Integrated with multiple third-party medical APIs.",
-          startDate: "2022-06-15",
-          endDate: "2022-12-20",
-          role: "Backend Developer",
-          technologies: ["Node.js", "Express", "MongoDB", "React", "Azure"],
-          teamSize: 8,
-          status: "completed"
-        }
-      ]
+        setUser(currentUser)
+        setEditedUser(currentUser)
+      } catch (error) {
+        console.error("Error loading user:", error)
+        setError("Failed to load user profile")
+      } finally {
+        setLoading(false)
+      }
     }
 
-    setTimeout(() => {
-      setProfile(mockProfile)
-      setLoading(false)
-    }, 1000)
-  }, [])
-
-  const handleInputChange = (field: string, value: string) => {
-    if (profile) {
-      setProfile({ ...profile, [field]: value })
-      setHasChanges(true)
-    }
-  }
+    loadUser()
+  }, [router])
 
   const handleSave = async () => {
+    if (!editedUser || !user) return
+
     setSaving(true)
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    setSaving(false)
-    setEditMode(false)
-    setHasChanges(false)
+    setError("")
+    setSuccess("")
+
+    try {
+      const updatedUser = await updateUserProfile(user.id, editedUser)
+      if (updatedUser) {
+        setUser(updatedUser)
+        setEditedUser(updatedUser)
+        setIsEditing(false)
+        setSuccess("Profile updated successfully!")
+        setTimeout(() => setSuccess(""), 3000)
+      } else {
+        setError("Failed to update profile")
+      }
+    } catch (error) {
+      console.error("Error updating profile:", error)
+      setError("An error occurred while updating your profile")
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const handleSubmitForReview = async () => {
-    setSaving(true)
-    // Simulate API call to submit for manager review
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    if (profile) {
-      // Update the last review submission timestamp
-      setProfile({
-        ...profile,
-        last_review_submission: new Date().toISOString()
-      })
+  const handleCancel = () => {
+    setEditedUser(user)
+    setIsEditing(false)
+    setError("")
+    setSuccess("")
+  }
+
+  const updateField = (field: keyof AuthUser, value: any) => {
+    if (!editedUser) return
+    setEditedUser({ ...editedUser, [field]: value })
+  }
+
+  const addPreviousProject = () => {
+    if (!editedUser) return
+    const newProject = {
+      name: "",
+      client: "",
+      role: "",
+      duration: "",
+      description: "",
     }
-    
-    setSaving(false)
-    setShowReviewDialog(false)
-    setReviewMessage("")
-    setHasChanges(false)
-    // Show success message
+    updateField("previous_projects", [...(editedUser.previous_projects || []), newProject])
+  }
+
+  const updatePreviousProject = (index: number, field: string, value: string) => {
+    if (!editedUser || !editedUser.previous_projects) return
+    const updated = [...editedUser.previous_projects]
+    updated[index] = { ...updated[index], [field]: value }
+    updateField("previous_projects", updated)
+  }
+
+  const removePreviousProject = (index: number) => {
+    if (!editedUser || !editedUser.previous_projects) return
+    const updated = editedUser.previous_projects.filter((_, i) => i !== index)
+    updateField("previous_projects", updated)
   }
 
   const addCertification = () => {
-    if (profile && newCertification.name && newCertification.issuer && newCertification.issueDate) {
-      const certification: Certification = {
-        id: `cert-${Date.now()}`,
-        name: newCertification.name,
-        issuer: newCertification.issuer,
-        issueDate: newCertification.issueDate,
-        expiryDate: newCertification.expiryDate,
-        credentialUrl: newCertification.credentialUrl
-      }
-      setProfile({
-        ...profile,
-        certifications: [...profile.certifications, certification]
-      })
-      setNewCertification({})
-      setShowAddDialog(null)
-      setHasChanges(true)
+    if (!editedUser) return
+    const newCertification = {
+      name: "",
+      issuer: "",
+      date: "",
+      expiryDate: "",
     }
+    updateField("certifications", [...(editedUser.certifications || []), newCertification])
+  }
+
+  const updateCertification = (index: number, field: string, value: string) => {
+    if (!editedUser || !editedUser.certifications) return
+    const updated = [...editedUser.certifications]
+    updated[index] = { ...updated[index], [field]: value }
+    updateField("certifications", updated)
+  }
+
+  const removeCertification = (index: number) => {
+    if (!editedUser || !editedUser.certifications) return
+    const updated = editedUser.certifications.filter((_, i) => i !== index)
+    updateField("certifications", updated)
   }
 
   const addLanguage = () => {
-    if (profile && newLanguage.name && newLanguage.proficiency) {
-      const language: Language = {
-        id: `lang-${Date.now()}`,
-        name: newLanguage.name,
-        proficiency: newLanguage.proficiency
-      }
-      setProfile({
-        ...profile,
-        languages: [...profile.languages, language]
-      })
-      setNewLanguage({})
-      setShowAddDialog(null)
-      setHasChanges(true)
+    if (!editedUser) return
+    const newLanguage = {
+      name: "",
+      proficiency: "Basic",
     }
+    updateField("languages", [...(editedUser.languages || []), newLanguage])
   }
 
-  const addSkill = () => {
-    if (profile && newSkill.name && newSkill.level) {
-      const skill: Skill = {
-        id: `skill-${Date.now()}`,
-        name: newSkill.name,
-        level: newSkill.level
-      }
-      setProfile({
-        ...profile,
-        skills: [...profile.skills, skill]
-      })
-      setNewSkill({})
-      setShowAddDialog(null)
-      setHasChanges(true)
-    }
+  const updateLanguage = (index: number, field: string, value: string) => {
+    if (!editedUser || !editedUser.languages) return
+    const updated = [...editedUser.languages]
+    updated[index] = { ...updated[index], [field]: value }
+    updateField("languages", updated)
+  }
+
+  const removeLanguage = (index: number) => {
+    if (!editedUser || !editedUser.languages) return
+    const updated = editedUser.languages.filter((_, i) => i !== index)
+    updateField("languages", updated)
   }
 
   const addEducation = () => {
-    if (profile && newEducation.degree && newEducation.institution && newEducation.graduationDate) {
-      const education: Education = {
-        id: `edu-${Date.now()}`,
-        degree: newEducation.degree,
-        institution: newEducation.institution,
-        graduationDate: newEducation.graduationDate,
-        gpa: newEducation.gpa
-      }
-      setProfile({
-        ...profile,
-        education: [...profile.education, education]
-      })
-      setNewEducation({})
-      setShowAddDialog(null)
-      setHasChanges(true)
+    if (!editedUser) return
+    const newEducation = {
+      degree: "",
+      institution: "",
+      year: "",
+      field: "",
+    }
+    updateField("education", [...(editedUser.education || []), newEducation])
+  }
+
+  const updateEducation = (index: number, field: string, value: string) => {
+    if (!editedUser || !editedUser.education) return
+    const updated = [...editedUser.education]
+    updated[index] = { ...updated[index], [field]: value }
+    updateField("education", updated)
+  }
+
+  const removeEducation = (index: number) => {
+    if (!editedUser || !editedUser.education) return
+    const updated = editedUser.education.filter((_, i) => i !== index)
+    updateField("education", updated)
+  }
+
+  const getRoleBadgeColor = (role: string) => {
+    switch (role) {
+      case "super_user":
+        return "bg-purple-100 text-purple-800 border-purple-200"
+      case "hr":
+        return "bg-blue-100 text-blue-800 border-blue-200"
+      case "manager":
+        return "bg-green-100 text-green-800 border-green-200"
+      case "collaborator":
+        return "bg-gray-100 text-gray-800 border-gray-200"
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200"
     }
   }
 
-  const removeItem = (type: string, id: string) => {
-    if (profile) {
-      const updatedProfile = { ...profile }
-      switch (type) {
-        case 'certification':
-          updatedProfile.certifications = profile.certifications.filter(item => item.id !== id)
-          break
-        case 'language':
-          updatedProfile.languages = profile.languages.filter(item => item.id !== id)
-          break
-        case 'skill':
-          updatedProfile.skills = profile.skills.filter(item => item.id !== id)
-          break
-        case 'education':
-          updatedProfile.education = profile.education.filter(item => item.id !== id)
-          break
-      }
-      setProfile(updatedProfile)
-      setHasChanges(true)
+  const getRoleDisplayName = (role: string) => {
+    const roleMap: Record<string, string> = {
+      super_user: "Super User",
+      hr: "HR Manager",
+      manager: "Team Manager",
+      collaborator: "Employee",
     }
+    return roleMap[role] || role
   }
 
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-  }
-
-  const getScoreBadgeColor = (score: number) => {
-    if (score >= 90) return "bg-green-100 text-green-800"
-    if (score >= 80) return "bg-blue-100 text-blue-800"
-    if (score >= 70) return "bg-yellow-100 text-yellow-800"
-    return "bg-red-100 text-red-800"
-  }
-
-  const getLevelColor = (level: string) => {
-    switch (level.toLowerCase()) {
-      case 'expert': return 'bg-purple-100 text-purple-800'
-      case 'advanced': return 'bg-blue-100 text-blue-800'
-      case 'intermediate': return 'bg-green-100 text-green-800'
-      case 'beginner': return 'bg-gray-100 text-gray-800'
-      case 'native': case 'fluent': return 'bg-purple-100 text-purple-800'
-      default: return 'bg-gray-100 text-gray-800'
+  const getProficiencyColor = (proficiency: string) => {
+    switch (proficiency) {
+      case "Native":
+        return "bg-green-100 text-green-800 border-green-200"
+      case "Professional":
+        return "bg-blue-100 text-blue-800 border-blue-200"
+      case "Conversational":
+        return "bg-yellow-100 text-yellow-800 border-yellow-200"
+      case "Basic":
+        return "bg-gray-100 text-gray-800 border-gray-200"
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200"
     }
-  }
-
-  const formatDateOnly = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric"
-    })
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <header className="bg-slate-900 border-b border-gray-300">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center py-6">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center mr-3">
-                  <span className="text-white font-bold text-lg">T</span>
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold text-white">TalentArk</h1>
-                  <p className="text-sm text-gray-300">My Profile</p>
-                </div>
-              </div>
-              <nav className="hidden md:flex space-x-8">
-                <Link href="/" className="text-gray-300 hover:text-white transition-colors">
-                  Dashboard
-                </Link>
-                <Link href="/my-profile" className="text-white font-medium">
-                  My Profile
-                </Link>
-                <Link href="/projects" className="text-gray-300 hover:text-white transition-colors">
-                  Projects
-                </Link>
-                <Link href="/analytics" className="text-gray-300 hover:text-white transition-colors">
-                  Analytics
-                </Link>
-                <Link href="/org-chart" className="text-gray-300 hover:text-white transition-colors">
-                  Org Chart
-                </Link>
-                <Link href="/import" className="text-gray-300 hover:text-white transition-colors">
-                  Import
-                </Link>
-              </nav>
-            </div>
-          </div>
-        </header>
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="animate-pulse space-y-6">
-            <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 space-y-6">
-                <div className="h-64 bg-gray-200 rounded"></div>
-                <div className="h-48 bg-gray-200 rounded"></div>
-              </div>
-              <div className="space-y-6">
-                <div className="h-32 bg-gray-200 rounded"></div>
-                <div className="h-48 bg-gray-200 rounded"></div>
-              </div>
-            </div>
-          </div>
-        </main>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading profile...</p>
+        </div>
       </div>
     )
   }
 
-  if (!profile) return null
+  if (!user || !editedUser) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600">Profile not found</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-slate-900 border-b border-gray-300">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center">
-              <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center mr-3">
-                <span className="text-white font-bold text-lg">T</span>
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-white">TalentArk</h1>
-                <p className="text-sm text-gray-300">My Profile</p>
-              </div>
+      <div className="max-w-6xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900">My Profile</h1>
+              <p className="text-gray-600 mt-1">Manage your personal information and professional details</p>
             </div>
-            <nav className="hidden md:flex space-x-8">
-              <Link href="/" className="text-gray-300 hover:text-white transition-colors">
-                Dashboard
-              </Link>
-              <Link href="/my-profile" className="text-white font-medium">
-                My Profile
-              </Link>
-              <Link href="/projects" className="text-gray-300 hover:text-white transition-colors">
-                Projects
-              </Link>
-              <Link href="/analytics" className="text-gray-300 hover:text-white transition-colors">
-                Analytics
-              </Link>
-              <Link href="/org-chart" className="text-gray-300 hover:text-white transition-colors">
-                Org Chart
-              </Link>
-              <Link href="/import" className="text-gray-300 hover:text-white transition-colors">
-                Import
-              </Link>
-            </nav>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header with Actions */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900">My Profile</h1>
-            <p className="text-gray-600 mt-1">Manage your professional information</p>
-          </div>
-          <div className="flex gap-3">
-            {hasChanges && (
-              <Alert className="w-auto p-3 border-yellow-200 bg-yellow-50">
-                <AlertCircle className="h-4 w-4 text-yellow-600" />
-                <AlertDescription className="text-yellow-800 text-sm">
-                  You have unsaved changes
-                </AlertDescription>
-              </Alert>
-            )}
-            {editMode ? (
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  onClick={() => {
-                    setEditMode(false)
-                    setHasChanges(false)
-                  }}
-                  className="border-slate-900 text-slate-900 hover:bg-slate-900 hover:text-white"
-                >
-                  <X className="h-4 w-4 mr-2" />
-                  Cancel
-                </Button>
-                <Button 
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="bg-red-600 text-white hover:bg-red-700"
-                >
-                  <Save className="h-4 w-4 mr-2" />
-                  {saving ? 'Saving...' : 'Save Changes'}
-                </Button>
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                {hasChanges && (
-                  <Dialog open={showReviewDialog} onOpenChange={setShowReviewDialog}>
-                    <DialogTrigger asChild>
-                      <Button className="bg-blue-600 text-white hover:bg-blue-700">
-                        <Send className="h-4 w-4 mr-2" />
-                        Submit for Review
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Submit Profile for Manager Review</DialogTitle>
-                        <DialogDescription>
-                          Your profile changes will be sent to {profile.manager_name} for approval.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <Label htmlFor="review-message">Message to Manager (Optional)</Label>
-                          <Textarea
-                            id="review-message"
-                            placeholder="Add a note about your changes..."
-                            value={reviewMessage}
-                            onChange={(e) => setReviewMessage(e.target.value)}
-                            className="mt-1"
-                          />
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowReviewDialog(false)}>
-                          Cancel
-                        </Button>
-                        <Button 
-                          onClick={handleSubmitForReview}
-                          disabled={saving}
-                          className="bg-blue-600 text-white hover:bg-blue-700"
-                        >
-                          {saving ? 'Submitting...' : 'Submit for Review'}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                )}
-                <Button 
-                  onClick={() => setEditMode(true)}
-                  className="bg-red-600 text-white hover:bg-red-700"
-                >
-                  <Edit className="h-4 w-4 mr-2" />
+            <div className="flex items-center space-x-3">
+              {!isEditing ? (
+                <Button onClick={() => setIsEditing(true)} className="bg-red-600 hover:bg-red-700">
+                  <Edit3 className="h-4 w-4 mr-2" />
                   Edit Profile
                 </Button>
-              </div>
-            )}
+              ) : (
+                <div className="flex space-x-2">
+                  <Button onClick={handleCancel} variant="outline" disabled={saving}>
+                    <X className="h-4 w-4 mr-2" />
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSave} disabled={saving} className="bg-red-600 hover:bg-red-700">
+                    {saving ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        Save Changes
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Profile Information */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Basic Information Card */}
-            <Card className="bg-white border border-gray-200">
+        {/* Alerts */}
+        {error && (
+          <Alert className="mb-6 border-red-200 bg-red-50">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="text-red-800">{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {success && (
+          <Alert className="mb-6 border-green-200 bg-green-50">
+            <CheckCircle className="h-4 w-4" />
+            <AlertDescription className="text-green-800">{success}</AlertDescription>
+          </Alert>
+        )}
+
+        <Tabs defaultValue="personal" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="personal">Personal Information</TabsTrigger>
+            <TabsTrigger value="professional">Professional Details</TabsTrigger>
+            <TabsTrigger value="additional">Additional Information</TabsTrigger>
+          </TabsList>
+
+          {/* Personal Information Tab */}
+          <TabsContent value="personal" className="space-y-6">
+            <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
+                <CardTitle className="flex items-center">
+                  <User className="h-5 w-5 mr-2" />
                   Basic Information
                 </CardTitle>
+                <CardDescription>Your basic personal and contact information</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="flex items-center space-x-6">
-                  <div className="relative">
-                    <Avatar className="h-24 w-24">
-                      <AvatarImage src={profile.avatar || `/placeholder.svg?height=96&width=96&text=${getInitials(profile.name)}`} alt={profile.name} />
-                      <AvatarFallback className="bg-red-600 text-white text-2xl">
-                        {getInitials(profile.name)}
-                      </AvatarFallback>
-                    </Avatar>
-                    {editMode && (
-                      <Button
-                        size="sm"
-                        className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full bg-red-600 hover:bg-red-700"
-                      >
-                        <Camera className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
+                {/* Profile Header */}
+                <div className="flex items-start space-x-6">
+                  <Avatar className="h-24 w-24">
+                    <AvatarImage src={editedUser.profile_image || "/placeholder.svg"} alt={editedUser.name} />
+                    <AvatarFallback className="text-lg">
+                      {editedUser.name
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")}
+                    </AvatarFallback>
+                  </Avatar>
                   <div className="flex-1 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="name">Full Name</Label>
-                        <Input
-                          id="name"
-                          value={profile.name}
-                          onChange={(e) => handleInputChange('name', e.target.value)}
-                          disabled={!editMode}
-                          className="mt-1"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="position">Position</Label>
-                        <Input
-                          id="position"
-                          value={profile.position}
-                          onChange={(e) => handleInputChange('position', e.target.value)}
-                          disabled={!editMode}
-                          className="mt-1"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={profile.email}
-                      onChange={(e) => handleInputChange('email', e.target.value)}
-                      disabled={!editMode}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="phone">Phone</Label>
-                    <Input
-                      id="phone"
-                      value={profile.phone}
-                      onChange={(e) => handleInputChange('phone', e.target.value)}
-                      disabled={!editMode}
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="location">Location</Label>
-                  <Input
-                    id="location"
-                    value={profile.location}
-                    onChange={(e) => handleInputChange('location', e.target.value)}
-                    disabled={!editMode}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="about">About</Label>
-                  <Textarea
-                    id="about"
-                    value={profile.about}
-                    onChange={(e) => handleInputChange('about', e.target.value)}
-                    disabled={!editMode}
-                    rows={4}
-                    className="mt-1"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Skills & Technologies */}
-            <Card className="bg-white border border-gray-200">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Code className="h-5 w-5" />
-                    Skills & Technologies
-                  </CardTitle>
-                  {editMode && (
-                    <Dialog open={showAddDialog === 'skill'} onOpenChange={(open) => setShowAddDialog(open ? 'skill' : null)}>
-                      <DialogTrigger asChild>
-                        <Button size="sm" variant="outline">
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Add New Skill</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div>
-                            <Label htmlFor="skill-name">Skill Name</Label>
-                            <Input
-                              id="skill-name"
-                              value={newSkill.name || ''}
-                              onChange={(e) => setNewSkill({ ...newSkill, name: e.target.value })}
-                              placeholder="e.g., React, Python, AWS"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="skill-level">Proficiency Level</Label>
-                            <select
-                              id="skill-level"
-                              value={newSkill.level || ''}
-                              onChange={(e) => setNewSkill({ ...newSkill, level: e.target.value as Skill['level'] })}
-                              className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md"
-                            >
-                              <option value="">Select level</option>
-                              <option value="Beginner">Beginner</option>
-                              <option value="Intermediate">Intermediate</option>
-                              <option value="Advanced">Advanced</option>
-                              <option value="Expert">Expert</option>
-                            </select>
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button variant="outline" onClick={() => setShowAddDialog(null)}>
-                            Cancel
-                          </Button>
-                          <Button onClick={addSkill}>Add Skill</Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {profile.skills.map((skill) => (
-                    <div key={skill.id} className="flex items-center gap-1">
-                      <Badge className={`${getLevelColor(skill.level)} text-sm`}>
-                        {skill.name} - {skill.level}
-                      </Badge>
-                      {editMode && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => removeItem('skill', skill.id)}
-                          className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Certifications */}
-            <Card className="bg-white border border-gray-200">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Award className="h-5 w-5" />
-                    Certifications
-                  </CardTitle>
-                  {editMode && (
-                    <Dialog open={showAddDialog === 'certification'} onOpenChange={(open) => setShowAddDialog(open ? 'certification' : null)}>
-                      <DialogTrigger asChild>
-                        <Button size="sm" variant="outline">
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Add New Certification</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div>
-                            <Label htmlFor="cert-name">Certification Name</Label>
-                            <Input
-                              id="cert-name"
-                              value={newCertification.name || ''}
-                              onChange={(e) => setNewCertification({ ...newCertification, name: e.target.value })}
-                              placeholder="e.g., AWS Solutions Architect"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="cert-issuer">Issuer</Label>
-                            <Input
-                              id="cert-issuer"
-                              value={newCertification.issuer || ''}
-                              onChange={(e) => setNewCertification({ ...newCertification, issuer: e.target.value })}
-                              placeholder="e.g., Amazon Web Services"
-                            />
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <Label htmlFor="cert-issue-date">Issue Date</Label>
-                              <Input
-                                id="cert-issue-date"
-                                type="date"
-                                value={newCertification.issueDate || ''}
-                                onChange={(e) => setNewCertification({ ...newCertification, issueDate: e.target.value })}
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="cert-expiry-date">Expiry Date (Optional)</Label>
-                              <Input
-                                id="cert-expiry-date"
-                                type="date"
-                                value={newCertification.expiryDate || ''}
-                                onChange={(e) => setNewCertification({ ...newCertification, expiryDate: e.target.value })}
-                              />
-                            </div>
-                          </div>
-                          <div>
-                            <Label htmlFor="cert-url">Credential URL (Optional)</Label>
-                            <Input
-                              id="cert-url"
-                              type="url"
-                              value={newCertification.credentialUrl || ''}
-                              onChange={(e) => setNewCertification({ ...newCertification, credentialUrl: e.target.value })}
-                              placeholder="https://..."
-                            />
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button variant="outline" onClick={() => setShowAddDialog(null)}>
-                            Cancel
-                          </Button>
-                          <Button onClick={addCertification}>Add Certification</Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {profile.certifications.map((cert) => (
-                    <div key={cert.id} className="flex items-start justify-between p-4 border border-gray-200 rounded-lg">
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-slate-900">{cert.name}</h4>
-                        <p className="text-sm text-gray-600">{cert.issuer}</p>
-                        <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                          <span>Issued: {new Date(cert.issueDate).toLocaleDateString()}</span>
-                          {cert.expiryDate && (
-                            <span>Expires: {new Date(cert.expiryDate).toLocaleDateString()}</span>
-                          )}
-                        </div>
-                        {cert.credentialUrl && (
-                          <a 
-                            href={cert.credentialUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-xs text-blue-600 hover:text-blue-700 mt-1 inline-block"
-                          >
-                            View Credential →
-                          </a>
+                        {isEditing ? (
+                          <Input
+                            id="name"
+                            value={editedUser.name}
+                            onChange={(e) => updateField("name", e.target.value)}
+                            className="mt-1"
+                          />
+                        ) : (
+                          <p className="mt-1 text-sm text-gray-900">{user.name}</p>
                         )}
                       </div>
-                      {editMode && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => removeItem('certification', cert.id)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Languages */}
-            <Card className="bg-white border border-gray-200">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Globe className="h-5 w-5" />
-                    Languages
-                  </CardTitle>
-                  {editMode && (
-                    <Dialog open={showAddDialog === 'language'} onOpenChange={(open) => setShowAddDialog(open ? 'language' : null)}>
-                      <DialogTrigger asChild>
-                        <Button size="sm" variant="outline">
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Add New Language</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div>
-                            <Label htmlFor="lang-name">Language</Label>
-                            <Input
-                              id="lang-name"
-                              value={newLanguage.name || ''}
-                              onChange={(e) => setNewLanguage({ ...newLanguage, name: e.target.value })}
-                              placeholder="e.g., Spanish, French, German"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="lang-proficiency">Proficiency Level</Label>
-                            <select
-                              id="lang-proficiency"
-                              value={newLanguage.proficiency || ''}
-                              onChange={(e) => setNewLanguage({ ...newLanguage, proficiency: e.target.value as Language['proficiency'] })}
-                              className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md"
-                            >
-                              <option value="">Select proficiency</option>
-                              <option value="Beginner">Beginner</option>
-                              <option value="Intermediate">Intermediate</option>
-                              <option value="Advanced">Advanced</option>
-                              <option value="Fluent">Fluent</option>
-                              <option value="Native">Native</option>
-                            </select>
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button variant="outline" onClick={() => setShowAddDialog(null)}>
-                            Cancel
-                          </Button>
-                          <Button onClick={addLanguage}>Add Language</Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {profile.languages.map((language) => (
-                    <div key={language.id} className="flex items-center gap-1">
-                      <Badge className={`${getLevelColor(language.proficiency)} text-sm`}>
-                        {language.name} - {language.proficiency}
-                      </Badge>
-                      {editMode && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => removeItem('language', language.id)}
-                          className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Education */}
-            <Card className="bg-white border border-gray-200">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <GraduationCap className="h-5 w-5" />
-                    Education
-                  </CardTitle>
-                  {editMode && (
-                    <Dialog open={showAddDialog === 'education'} onOpenChange={(open) => setShowAddDialog(open ? 'education' : null)}>
-                      <DialogTrigger asChild>
-                        <Button size="sm" variant="outline">
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Add Education</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div>
-                            <Label htmlFor="edu-degree">Degree</Label>
-                            <Input
-                              id="edu-degree"
-                              value={newEducation.degree || ''}
-                              onChange={(e) => setNewEducation({ ...newEducation, degree: e.target.value })}
-                              placeholder="e.g., Bachelor of Science in Computer Science"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="edu-institution">Institution</Label>
-                            <Input
-                              id="edu-institution"
-                              value={newEducation.institution || ''}
-                              onChange={(e) => setNewEducation({ ...newEducation, institution: e.target.value })}
-                              placeholder="e.g., University of Texas at Austin"
-                            />
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <Label htmlFor="edu-graduation">Graduation Date</Label>
-                              <Input
-                                id="edu-graduation"
-                                type="date"
-                                value={newEducation.graduationDate || ''}
-                                onChange={(e) => setNewEducation({ ...newEducation, graduationDate: e.target.value })}
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="edu-gpa">GPA (Optional)</Label>
-                              <Input
-                                id="edu-gpa"
-                                value={newEducation.gpa || ''}
-                                onChange={(e) => setNewEducation({ ...newEducation, gpa: e.target.value })}
-                                placeholder="e.g., 3.8"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button variant="outline" onClick={() => setShowAddDialog(null)}>
-                            Cancel
-                          </Button>
-                          <Button onClick={addEducation}>Add Education</Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {profile.education.map((edu) => (
-                    <div key={edu.id} className="flex items-start justify-between p-4 border border-gray-200 rounded-lg">
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-slate-900">{edu.degree}</h4>
-                        <p className="text-sm text-gray-600">{edu.institution}</p>
-                        <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                          <span>Graduated: {new Date(edu.graduationDate).toLocaleDateString()}</span>
-                          {edu.gpa && <span>GPA: {edu.gpa}</span>}
+                      <div>
+                        <Label>Role</Label>
+                        <div className="mt-1">
+                          <Badge className={`${getRoleBadgeColor(user.role)}`} variant="outline">
+                            {getRoleDisplayName(user.role)}
+                          </Badge>
                         </div>
                       </div>
-                      {editMode && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => removeItem('education', edu.id)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
                     </div>
-                  ))}
+                  </div>
+                </div>
+
+                {/* Contact Information */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label htmlFor="email" className="flex items-center">
+                      <Mail className="h-4 w-4 mr-2" />
+                      Email Address
+                    </Label>
+                    {isEditing ? (
+                      <Input
+                        id="email"
+                        type="email"
+                        value={editedUser.email}
+                        onChange={(e) => updateField("email", e.target.value)}
+                        className="mt-1"
+                      />
+                    ) : (
+                      <p className="mt-1 text-sm text-gray-900">{user.email}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor="phone" className="flex items-center">
+                      <Phone className="h-4 w-4 mr-2" />
+                      Phone Number
+                    </Label>
+                    {isEditing ? (
+                      <Input
+                        id="phone"
+                        value={editedUser.phone || ""}
+                        onChange={(e) => updateField("phone", e.target.value)}
+                        className="mt-1"
+                      />
+                    ) : (
+                      <p className="mt-1 text-sm text-gray-900">{user.phone || "Not provided"}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label htmlFor="location" className="flex items-center">
+                      <MapPin className="h-4 w-4 mr-2" />
+                      Location
+                    </Label>
+                    {isEditing ? (
+                      <Input
+                        id="location"
+                        value={editedUser.location}
+                        onChange={(e) => updateField("location", e.target.value)}
+                        className="mt-1"
+                      />
+                    ) : (
+                      <p className="mt-1 text-sm text-gray-900">{user.location}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor="department" className="flex items-center">
+                      <Building className="h-4 w-4 mr-2" />
+                      Department
+                    </Label>
+                    {isEditing ? (
+                      <Input
+                        id="department"
+                        value={editedUser.department || ""}
+                        onChange={(e) => updateField("department", e.target.value)}
+                        className="mt-1"
+                      />
+                    ) : (
+                      <p className="mt-1 text-sm text-gray-900">{user.department || "Not specified"}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* About Section */}
+                <div>
+                  <Label htmlFor="about">About</Label>
+                  {isEditing ? (
+                    <Textarea
+                      id="about"
+                      value={editedUser.about || ""}
+                      onChange={(e) => updateField("about", e.target.value)}
+                      className="mt-1"
+                      rows={4}
+                      placeholder="Tell us about yourself..."
+                    />
+                  ) : (
+                    <p className="mt-1 text-sm text-gray-900">{user.about || "No description provided"}</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Professional Details Tab */}
+          <TabsContent value="professional" className="space-y-6">
+            {/* Work Information */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Briefcase className="h-5 w-5 mr-2" />
+                  Work Information
+                </CardTitle>
+                <CardDescription>Your current role and work details</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label htmlFor="position">Position</Label>
+                    {isEditing ? (
+                      <Input
+                        id="position"
+                        value={editedUser.position}
+                        onChange={(e) => updateField("position", e.target.value)}
+                        className="mt-1"
+                      />
+                    ) : (
+                      <p className="mt-1 text-sm text-gray-900">{user.position}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor="hire_date" className="flex items-center">
+                      <Calendar className="h-4 w-4 mr-2" />
+                      Hire Date
+                    </Label>
+                    {isEditing ? (
+                      <Input
+                        id="hire_date"
+                        type="date"
+                        value={editedUser.hire_date || ""}
+                        onChange={(e) => updateField("hire_date", e.target.value)}
+                        className="mt-1"
+                      />
+                    ) : (
+                      <p className="mt-1 text-sm text-gray-900">
+                        {user.hire_date ? new Date(user.hire_date).toLocaleDateString() : "Not specified"}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label htmlFor="manager">Manager</Label>
+                    {isEditing ? (
+                      <Input
+                        id="manager"
+                        value={editedUser.manager || ""}
+                        onChange={(e) => updateField("manager", e.target.value)}
+                        className="mt-1"
+                      />
+                    ) : (
+                      <p className="mt-1 text-sm text-gray-900">{user.manager || "Not specified"}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor="years_of_experience">Years of Experience</Label>
+                    {isEditing ? (
+                      <Input
+                        id="years_of_experience"
+                        type="number"
+                        value={editedUser.years_of_experience || ""}
+                        onChange={(e) => updateField("years_of_experience", Number.parseInt(e.target.value) || 0)}
+                        className="mt-1"
+                      />
+                    ) : (
+                      <p className="mt-1 text-sm text-gray-900">{user.years_of_experience || "Not specified"} years</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Current Project Assignment */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label htmlFor="project_assignment">Current Project</Label>
+                    {isEditing ? (
+                      <Select
+                        value={editedUser.project_assignment || ""}
+                        onValueChange={(value) => updateField("project_assignment", value)}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select a project" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableProjects.map((project) => (
+                            <SelectItem key={project.id} value={project.name}>
+                              <div className="flex items-center justify-between w-full">
+                                <span>{project.name}</span>
+                                <Badge
+                                  variant="outline"
+                                  className={`ml-2 ${
+                                    project.status === "Active"
+                                      ? "bg-green-100 text-green-800"
+                                      : "bg-yellow-100 text-yellow-800"
+                                  }`}
+                                >
+                                  {project.status}
+                                </Badge>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <p className="mt-1 text-sm text-gray-900">{user.project_assignment || "Not assigned"}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor="project_allocation_percentage">Project Allocation (%)</Label>
+                    {isEditing ? (
+                      <Input
+                        id="project_allocation_percentage"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={editedUser.project_allocation_percentage || ""}
+                        onChange={(e) =>
+                          updateField("project_allocation_percentage", Number.parseInt(e.target.value) || 0)
+                        }
+                        className="mt-1"
+                      />
+                    ) : (
+                      <p className="mt-1 text-sm text-gray-900">{user.project_allocation_percentage || 0}%</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Performance Scores */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label className="flex items-center">
+                      <Star className="h-4 w-4 mr-2" />
+                      Employee Score
+                    </Label>
+                    <div className="mt-1 flex items-center space-x-2">
+                      <div className="flex-1 bg-gray-200 rounded-full h-2">
+                        <div className="bg-red-600 h-2 rounded-full" style={{ width: `${user.employee_score}%` }}></div>
+                      </div>
+                      <span className="text-sm font-medium text-gray-900">{user.employee_score}/100</span>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="flex items-center">
+                      <Award className="h-4 w-4 mr-2" />
+                      Company Score
+                    </Label>
+                    <div className="mt-1 flex items-center space-x-2">
+                      <div className="flex-1 bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-blue-600 h-2 rounded-full"
+                          style={{ width: `${user.company_score * 10}%` }}
+                        ></div>
+                      </div>
+                      <span className="text-sm font-medium text-gray-900">{user.company_score}/10</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Skills */}
+                <div>
+                  <Label htmlFor="skills">Skills</Label>
+                  {isEditing ? (
+                    <Textarea
+                      id="skills"
+                      value={editedUser.skills?.join(", ") || ""}
+                      onChange={(e) =>
+                        updateField(
+                          "skills",
+                          e.target.value.split(",").map((s) => s.trim()),
+                        )
+                      }
+                      className="mt-1"
+                      placeholder="Enter skills separated by commas"
+                    />
+                  ) : (
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {user.skills?.map((skill, index) => (
+                        <Badge key={index} variant="outline" className="bg-gray-100 text-gray-800">
+                          {skill}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Technologies */}
+                <div>
+                  <Label htmlFor="technologies" className="flex items-center">
+                    <Code className="h-4 w-4 mr-2" />
+                    Technologies
+                  </Label>
+                  {isEditing ? (
+                    <Textarea
+                      id="technologies"
+                      value={editedUser.technologies?.join(", ") || ""}
+                      onChange={(e) =>
+                        updateField(
+                          "technologies",
+                          e.target.value.split(",").map((s) => s.trim()),
+                        )
+                      }
+                      className="mt-1"
+                      placeholder="Enter technologies separated by commas"
+                    />
+                  ) : (
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {user.technologies?.map((tech, index) => (
+                        <Badge key={index} variant="outline" className="bg-blue-100 text-blue-800">
+                          {tech}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
 
             {/* Previous Projects */}
-            <Card className="bg-white border border-gray-200">
+            <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Building2 className="h-5 w-5" />
-                    Previous Projects
-                  </CardTitle>
+                  <div>
+                    <CardTitle className="flex items-center">
+                      <Briefcase className="h-5 w-5 mr-2" />
+                      Previous Projects
+                    </CardTitle>
+                    <CardDescription>Your project history and achievements</CardDescription>
+                  </div>
+                  {isEditing && (
+                    <Button onClick={addPreviousProject} variant="outline" size="sm">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Project
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  {profile.previous_projects.map((project, index) => (
-                    <div key={project.id} className="relative">
-                      {/* Timeline connector */}
-                      {index < profile.previous_projects.length - 1 && (
-                        <div className="absolute left-3 top-8 w-0.5 h-20 bg-gray-200"></div>
-                      )}
-                      
-                      <div className="flex items-start space-x-4">
-                        {/* Timeline dot */}
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-1 ${
-                          project.status === 'completed' ? 'bg-green-500' : 
-                          project.status === 'cancelled' ? 'bg-red-500' : 'bg-yellow-500'
-                        }`}>
-                          <div className="w-2 h-2 bg-white rounded-full"></div>
-                        </div>
-                        
-                        {/* Project content */}
-                        <div className="flex-1 min-w-0 p-4 border border-gray-200 rounded-lg hover:border-red-600 transition-colors">
-                          <div className="flex justify-between items-start mb-3">
-                            <div className="flex-1">
-                              <h3 className="font-semibold text-slate-900 text-lg">{project.name}</h3>
-                              <p className="text-gray-600 text-sm">{project.client}</p>
-                              <p className="text-red-600 text-sm font-medium">{project.role}</p>
-                            </div>
-                          </div>
-
-                          <p className="text-gray-700 text-sm mb-4 leading-relaxed">{project.description}</p>
-
-                          <div className="flex flex-wrap items-center gap-2 mb-4">
-                            <Badge className={`text-xs ${
-                              project.status === 'completed' ? 'bg-green-100 text-green-800' :
-                              project.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                              'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              {project.teamSize} team members
-                            </Badge>
-                          </div>
-
-                          <div className="mb-4">
-                            <p className="text-xs text-gray-500 mb-2">Technologies Used:</p>
-                            <div className="flex flex-wrap gap-1">
-                              {project.technologies.map((tech, techIndex) => (
-                                <Badge key={techIndex} variant="outline" className="text-xs border-slate-900 text-slate-900">
-                                  {tech}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between text-xs text-gray-500">
-                            <div className="flex items-center">
-                              <Calendar className="h-3 w-3 mr-1" />
-                              <span>
-                                {new Date(project.startDate).toLocaleDateString('en-US', { 
-                                  year: 'numeric', 
-                                  month: 'short' 
-                                })} - {new Date(project.endDate).toLocaleDateString('en-US', { 
-                                  year: 'numeric', 
-                                  month: 'short' 
-                                })}
-                              </span>
-                            </div>
-                            <div className="flex items-center">
-                              <span>Duration: {(() => {
-                                const start = new Date(project.startDate)
-                                const end = new Date(project.endDate)
-                                const diffTime = Math.abs(end.getTime() - start.getTime())
-                                const diffMonths = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30))
-                                return diffMonths < 12 ? `${diffMonths} months` : `${Math.floor(diffMonths / 12)} years`
-                              })()}</span>
-                            </div>
-                          </div>
-                        </div>
+              <CardContent className="space-y-4">
+                {editedUser.previous_projects?.map((project, index) => (
+                  <div key={index} className="border rounded-lg p-4 space-y-4">
+                    {isEditing && (
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={() => removePreviousProject(index)}
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label>Project Name</Label>
+                        {isEditing ? (
+                          <Input
+                            value={project.name}
+                            onChange={(e) => updatePreviousProject(index, "name", e.target.value)}
+                            className="mt-1"
+                          />
+                        ) : (
+                          <p className="mt-1 text-sm font-medium text-gray-900">{project.name}</p>
+                        )}
+                      </div>
+                      <div>
+                        <Label>Client</Label>
+                        {isEditing ? (
+                          <Input
+                            value={project.client}
+                            onChange={(e) => updatePreviousProject(index, "client", e.target.value)}
+                            className="mt-1"
+                          />
+                        ) : (
+                          <p className="mt-1 text-sm text-gray-900">{project.client}</p>
+                        )}
                       </div>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Performance Score */}
-            <Card className="bg-white border border-gray-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Star className="h-5 w-5" />
-                  Performance Score
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-slate-900 mb-2">{profile.employee_score}</div>
-                  <Badge className={`${getScoreBadgeColor(profile.employee_score)} text-sm mb-4`}>
-                    {profile.employee_score >= 90 ? 'Excellent' : 
-                     profile.employee_score >= 80 ? 'Good' : 
-                     profile.employee_score >= 70 ? 'Average' : 'Needs Improvement'}
-                  </Badge>
-                  <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div 
-                      className="bg-red-600 h-3 rounded-full transition-all duration-300" 
-                      style={{ width: `${profile.employee_score}%` }}
-                    ></div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Current Project */}
-            <Card className="bg-white border border-gray-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Building2 className="h-5 w-5" />
-                  Current Project
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-semibold text-slate-900">{profile.current_project}</h4>
-                    <p className="text-sm text-gray-600">Project Allocation</p>
-                  </div>
-                  <div>
-                    <div className="flex justify-between text-sm text-gray-600 mb-2">
-                      <span>Allocation</span>
-                      <span>{profile.project_allocation_percentage}%</span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label>Role</Label>
+                        {isEditing ? (
+                          <Input
+                            value={project.role}
+                            onChange={(e) => updatePreviousProject(index, "role", e.target.value)}
+                            className="mt-1"
+                          />
+                        ) : (
+                          <p className="mt-1 text-sm text-gray-900">{project.role}</p>
+                        )}
+                      </div>
+                      <div>
+                        <Label>Duration</Label>
+                        {isEditing ? (
+                          <Input
+                            value={project.duration}
+                            onChange={(e) => updatePreviousProject(index, "duration", e.target.value)}
+                            className="mt-1"
+                            placeholder="e.g., Jan 2022 - Dec 2022"
+                          />
+                        ) : (
+                          <p className="mt-1 text-sm text-gray-900">{project.duration}</p>
+                        )}
+                      </div>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-red-600 h-2 rounded-full transition-all duration-300" 
-                        style={{ width: `${profile.project_allocation_percentage}%` }}
-                      ></div>
+                    <div>
+                      <Label>Description</Label>
+                      {isEditing ? (
+                        <Textarea
+                          value={project.description}
+                          onChange={(e) => updatePreviousProject(index, "description", e.target.value)}
+                          className="mt-1"
+                          rows={3}
+                        />
+                      ) : (
+                        <p className="mt-1 text-sm text-gray-900">{project.description}</p>
+                      )}
                     </div>
                   </div>
+                )) || <p className="text-gray-500 text-center py-4">No previous projects added</p>}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Additional Information Tab */}
+          <TabsContent value="additional" className="space-y-6">
+            {/* Certifications */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center">
+                      <Award className="h-5 w-5 mr-2" />
+                      Professional Certifications
+                    </CardTitle>
+                    <CardDescription>Your professional certifications and credentials</CardDescription>
+                  </div>
+                  {isEditing && (
+                    <Button onClick={addCertification} variant="outline" size="sm">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Certification
+                    </Button>
+                  )}
                 </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {editedUser.certifications?.map((cert, index) => (
+                  <div key={index} className="border rounded-lg p-4 space-y-4">
+                    {isEditing && (
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={() => removeCertification(index)}
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label>Certification Name</Label>
+                        {isEditing ? (
+                          <Input
+                            value={cert.name}
+                            onChange={(e) => updateCertification(index, "name", e.target.value)}
+                            className="mt-1"
+                          />
+                        ) : (
+                          <p className="mt-1 text-sm font-medium text-gray-900">{cert.name}</p>
+                        )}
+                      </div>
+                      <div>
+                        <Label>Issuer</Label>
+                        {isEditing ? (
+                          <Input
+                            value={cert.issuer}
+                            onChange={(e) => updateCertification(index, "issuer", e.target.value)}
+                            className="mt-1"
+                          />
+                        ) : (
+                          <p className="mt-1 text-sm text-gray-900">{cert.issuer}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label>Issue Date</Label>
+                        {isEditing ? (
+                          <Input
+                            value={cert.date}
+                            onChange={(e) => updateCertification(index, "date", e.target.value)}
+                            className="mt-1"
+                            placeholder="e.g., March 2023"
+                          />
+                        ) : (
+                          <p className="mt-1 text-sm text-gray-900">{cert.date}</p>
+                        )}
+                      </div>
+                      <div>
+                        <Label>Expiry Date (Optional)</Label>
+                        {isEditing ? (
+                          <Input
+                            value={cert.expiryDate || ""}
+                            onChange={(e) => updateCertification(index, "expiryDate", e.target.value)}
+                            className="mt-1"
+                            placeholder="e.g., March 2026"
+                          />
+                        ) : (
+                          <p className="mt-1 text-sm text-gray-900">{cert.expiryDate || "No expiry"}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )) || <p className="text-gray-500 text-center py-4">No certifications added</p>}
               </CardContent>
             </Card>
 
-            {/* Manager Information */}
-            <Card className="bg-white border border-gray-200">
+            {/* Languages */}
+            <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Reports To
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center">
+                      <Globe className="h-5 w-5 mr-2" />
+                      Languages & Proficiency
+                    </CardTitle>
+                    <CardDescription>Languages you speak and your proficiency level</CardDescription>
+                  </div>
+                  {isEditing && (
+                    <Button onClick={addLanguage} variant="outline" size="sm">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Language
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-semibold text-slate-900">{profile.manager_name}</h4>
-                    <p className="text-sm text-gray-600">Manager</p>
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Mail className="h-4 w-4 mr-2" />
-                    <a 
-                      href={`mailto:${profile.manager_email}`}
-                      className="text-blue-600 hover:text-blue-700"
-                    >
-                      {profile.manager_email}
-                    </a>
-                  </div>
-                  
-                  <Separator />
-                  
-                  {/* Review History Section */}
-                  <div className="space-y-3">
-                    <h5 className="font-medium text-slate-900 text-sm">Review History</h5>
-                    
-                    <div className="space-y-2">
-                      {profile.last_review_submission && (
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center text-gray-600">
-                            <Send className="h-3 w-3 mr-1" />
-                            <span>Last Submission:</span>
+                {editedUser.languages && editedUser.languages.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {editedUser.languages.map((lang, index) => (
+                      <div key={index} className="border rounded-lg p-4 space-y-3">
+                        {isEditing && (
+                          <div className="flex justify-end">
+                            <Button
+                              onClick={() => removeLanguage(index)}
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
-                          <span className="font-medium text-blue-700">
-                            {formatDateOnly(profile.last_review_submission)}
-                          </span>
+                        )}
+                        <div>
+                          <Label>Language</Label>
+                          {isEditing ? (
+                            <Input
+                              value={lang.name}
+                              onChange={(e) => updateLanguage(index, "name", e.target.value)}
+                              className="mt-1"
+                            />
+                          ) : (
+                            <p className="mt-1 text-sm font-medium text-gray-900">{lang.name}</p>
+                          )}
                         </div>
-                      )}
-                      
-                      {profile.last_review_approval && (
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center text-gray-600">
-                            <CheckCircle className="h-3 w-3 mr-1" />
-                            <span>Last Approval:</span>
-                          </div>
-                          <span className="font-medium text-green-700">
-                            {formatDateOnly(profile.last_review_approval)}
-                          </span>
+                        <div>
+                          <Label>Proficiency</Label>
+                          {isEditing ? (
+                            <Select
+                              value={lang.proficiency}
+                              onValueChange={(value) => updateLanguage(index, "proficiency", value)}
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {proficiencyLevels.map((level) => (
+                                  <SelectItem key={level} value={level}>
+                                    {level}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <div className="mt-1">
+                              <Badge className={`${getProficiencyColor(lang.proficiency)}`} variant="outline">
+                                {lang.proficiency}
+                              </Badge>
+                            </div>
+                          )}
                         </div>
-                      )}
-                      
-                      {!profile.last_review_submission && (
-                        <div className="text-xs text-gray-500 italic">
-                          No review submissions yet
-                        </div>
-                      )}
-                    </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
+                ) : (
+                  <p className="text-gray-500 text-center py-4">No languages added</p>
+                )}
               </CardContent>
             </Card>
 
-            {/* Employment Details */}
-            <Card className="bg-white border border-gray-200">
+            {/* Education */}
+            <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
-                  Employment Details
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Department</span>
-                    <span className="text-sm font-medium text-slate-900">{profile.department}</span>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center">
+                      <GraduationCap className="h-5 w-5 mr-2" />
+                      Education
+                    </CardTitle>
+                    <CardDescription>Your educational background and qualifications</CardDescription>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Level</span>
-                    <Badge variant="outline" className="text-xs">
-                      {profile.level}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Hire Date</span>
-                    <span className="text-sm font-medium text-slate-900">
-                      {new Date(profile.hire_date).toLocaleDateString()}
-                    </span>
-                  </div>
+                  {isEditing && (
+                    <Button onClick={addEducation} variant="outline" size="sm">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Education
+                    </Button>
+                  )}
                 </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {editedUser.education?.map((edu, index) => (
+                  <div key={index} className="border rounded-lg p-4 space-y-4">
+                    {isEditing && (
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={() => removeEducation(index)}
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label>Degree</Label>
+                        {isEditing ? (
+                          <Input
+                            value={edu.degree}
+                            onChange={(e) => updateEducation(index, "degree", e.target.value)}
+                            className="mt-1"
+                          />
+                        ) : (
+                          <p className="mt-1 text-sm font-medium text-gray-900">{edu.degree}</p>
+                        )}
+                      </div>
+                      <div>
+                        <Label>Institution</Label>
+                        {isEditing ? (
+                          <Input
+                            value={edu.institution}
+                            onChange={(e) => updateEducation(index, "institution", e.target.value)}
+                            className="mt-1"
+                          />
+                        ) : (
+                          <p className="mt-1 text-sm text-gray-900">{edu.institution}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label>Year</Label>
+                        {isEditing ? (
+                          <Input
+                            value={edu.year}
+                            onChange={(e) => updateEducation(index, "year", e.target.value)}
+                            className="mt-1"
+                            placeholder="e.g., 2020"
+                          />
+                        ) : (
+                          <p className="mt-1 text-sm text-gray-900">{edu.year}</p>
+                        )}
+                      </div>
+                      <div>
+                        <Label>Field of Study</Label>
+                        {isEditing ? (
+                          <Input
+                            value={edu.field}
+                            onChange={(e) => updateEducation(index, "field", e.target.value)}
+                            className="mt-1"
+                          />
+                        ) : (
+                          <p className="mt-1 text-sm text-gray-900">{edu.field}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )) || <p className="text-gray-500 text-center py-4">No education records added</p>}
               </CardContent>
             </Card>
-          </div>
-        </div>
-      </main>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   )
 }
