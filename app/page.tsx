@@ -61,10 +61,13 @@ export default function LoginPage() {
     }
   }
 
-  const handleDemoLogin = async (userEmail: string) => {
+  const handleDemoLogin = async (user: any) => {
+    let userEmail = user.email
     setLoading(true)
     setError("")
-
+   
+    localStorage.setItem("id", user.id)
+ 
     try {
       const result = await signIn(userEmail, "demo")
       if (result.success && result.user) {
@@ -154,7 +157,7 @@ export default function LoginPage() {
                 key={user.id}
                 variant="outline"
                 className="w-full justify-start h-auto p-4 border-gray-200 hover:border-red-600 hover:bg-red-50 bg-transparent"
-                onClick={() => handleDemoLogin(user.email)}
+                onClick={() => handleDemoLogin(user)}
                 disabled={loading}
               >
                 <div className="flex items-center space-x-3 w-full">

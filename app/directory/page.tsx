@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { fetchAllUsers, isSupabaseConfigured } from "@/lib/supabase-client"
 import {
   Search,
   Grid3X3,
@@ -27,13 +28,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import Link from "next/link"
 import { getCurrentUser, getDemoUsers, signOut, getRolePermissions, type User as AuthUser } from "@/lib/auth"
 
+
 export default function DirectoryPage() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
   const [employees, setEmployees] = useState<AuthUser[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [filterDepartment, setFilterDepartment] = useState("all")
   const [filterExperience, setFilterExperience] = useState("all")
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list")
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
@@ -46,7 +48,21 @@ export default function DirectoryPage() {
           return
         }
         setCurrentUser(user)
-        setEmployees(getDemoUsers())
+        //setEmployees(getDemoUsers())
+        // Use real Supabase data when configured; otherwise fall back to demo users.
+        if (isSupabaseConfigured()) {
+          try {
+            const rows = await fetchAllUsers()               // <- your existing helper
+            const mapped = (rows ?? []).map(mapRowToDirectoryUser)
+            setEmployees(mapped as any)                      // keep page types untouched
+          } catch (e) {
+            console.error("Failed to load users from Supabase, falling back to demo data.", e)
+            setEmployees(getDemoUsers())
+          }
+        } else {
+          setEmployees(getDemoUsers())
+        }
+
       } catch (error) {
         console.error("Auth check error:", error)
         router.push("/")
@@ -133,7 +149,13 @@ export default function DirectoryPage() {
     })
   }
 
-  const departments = [...new Set(employees.map((emp) => emp.department).filter(Boolean))]
+  const departments = [
+    ...new Set(
+      employees
+        .map((emp) => emp.department)
+        .filter((d): d is string => !!d)
+    ),
+  ]
 
   const stats = {
     totalEmployees: employees.length,
@@ -182,7 +204,8 @@ export default function DirectoryPage() {
               <Link href="/analytics" className="text-gray-300 hover:text-white transition-colors">
                 Analytics
               </Link>
-              <Link href="/org-chart" className="text-gray-300 hover:text-white transition-colors">
+              {/* <Link href="/org-chart" className="text-gray-300 hover:text-white transition-colors"> */}
+              <Link href="/org-chart" className="hidden">
                 Org Chart
               </Link>
               {(permissions.canViewAllProfiles || permissions.canManageSystem) && (
@@ -485,4 +508,45 @@ export default function DirectoryPage() {
       </main>
     </div>
   )
+}
+
+// Maps a raw DB row to the shape the Directory page already expects.
+// Do NOT change UI props or layout; only normalize data fields here.
+function mapRowToDirectoryUser(u: any) {
+  // Role mapping (optional): align DB role names to the UI's permission model if needed.
+  const mappedRole =
+    u?.role === "admin" ? "super_user" :
+    u?.role === "pm"    ? "manager"    :
+    u?.role === "hr"    ? "hr"         :
+    "collaborator"
+
+  return {
+    // identifiers
+    id: u?.id,
+    profile_id: u?.id,
+
+    // core display info
+    name: u?.name ?? "",
+    email: u?.email ?? "",
+    position: u?.position ?? "",
+    location: u?.location ?? "",
+    department: u?.department ?? "",
+
+    // scores shown in badges/cards
+    employee_score: u?.employee_score ?? 0,
+    company_score: u?.company_score ?? 0,
+
+    // image field the UI already uses
+    profile_image: u?.avatar ?? undefined,
+
+    // optional fields used by filters/chips
+    role: mappedRole,
+    phone: u?.phone ?? "",
+    hire_date: u?.hire_date ?? undefined,
+    project_assignment: u?.current_project_assignment ?? undefined,
+    project_allocation_percentage: u?.project_allocation_percentage ?? 0,
+
+    // the page sometimes checks this; default to 0 if your schema doesn't store it
+    years_of_experience: u?.years_of_experience ?? 0,
+  }
 }
