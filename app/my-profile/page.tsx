@@ -10,6 +10,7 @@ import { User, Mail, MapPin, Building2, Calendar, Globe, AlertTriangle, RefreshC
 import Link from "next/link"
 import Image from "next/image"
 import { generatePDF, downloadPDF } from "@/lib/pdf-generator"
+import { supabase, isSupabaseConfigured, fetchUserById } from "@/lib/supabase-client"
 
 interface Manager {
   id: string
@@ -142,7 +143,7 @@ const PieChart = ({ percentage, size = 120 }: { percentage: number; size?: numbe
 }
 
 // Mock data for demonstration
-const mockUserData: UserProfile = {
+/* const mockUserData: UserProfile = {
   id: "dca37910-61d0-474f-a7b5-6323aad275fa",
   name: "Sarah Johnson",
   email: "sarah.johnson@arkus.com",
@@ -294,7 +295,7 @@ const mockUserData: UserProfile = {
     }
   ]
 }
-
+ */
 export default function MyProfilePage({ params }: { params: { id: string } }) {
   const [user, setUser] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -312,16 +313,58 @@ export default function MyProfilePage({ params }: { params: { id: string } }) {
   const [isEditingEducation, setIsEditingEducation] = useState(false)
   const [educationDraft, setEducationDraft] = useState<Education[]>([])
 
-  useEffect(() => {
+/*   useEffect(() => {
     // Simulate loading
     const timer = setTimeout(() => {
       setUser(mockUserData)
       setLoading(false)
     }, 1000)
     return () => clearTimeout(timer)
-  }, [params.id])
+  }, [params.id]) */
 
-  // Sincronizar drafts al entrar en modo edición
+  useEffect(() => {
+    let cancelled = false
+  
+    const load = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+  
+        // DEBUG útil:
+        // console.log("params.id =>", params?.id)
+  
+        if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+          throw new Error("Supabase no está configurado. Define NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY en .env.local y reinicia el dev server.")
+        }
+  
+        const id = localStorage.getItem("id")
+        console.log("Iddddd:" + id)
+        if(id){
+          const data = await fetchUserById(id)       
+          
+          if (!cancelled) {
+            console.log("dataaaa:" + data)
+            if (!data) {
+              setUser(null)
+            } else {
+              setUser(data as UserProfile)
+            }
+          }
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setError(e?.message ?? "Error cargando el perfil desde Supabase.")
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+  
+    load()
+    return () => { cancelled = true }
+  }, [params.id])
+  
+  
   useEffect(() => {
     if (user) {
       setAboutDraft(user.about || "")
@@ -509,6 +552,16 @@ export default function MyProfilePage({ params }: { params: { id: string } }) {
             <CardContent className="p-12 text-center">
               <RefreshCw className="h-8 w-8 animate-spin text-red-600 mx-auto mb-4" />
               <p className="text-gray-600">Loading employee profile...</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {!loading && error && (
+          <Card className="bg-white border border-gray-200">
+            <CardContent className="p-12 text-center">
+              <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Error</h3>
+              <p className="text-gray-600 whitespace-pre-wrap">{error}</p>
             </CardContent>
           </Card>
         )}
@@ -1144,10 +1197,10 @@ export default function MyProfilePage({ params }: { params: { id: string } }) {
         )}
       </main>
 
-      <div>
+      {/* <div>
         <img src="/path/to/image.jpg" alt="Description of image" />
         <p>shop</p>
-      </div>
+      </div> */}
     </div>
   )
 }

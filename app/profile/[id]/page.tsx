@@ -11,6 +11,104 @@ import { User, Mail, MapPin, Building2, Calendar, Globe, AlertTriangle, RefreshC
 import Link from "next/link"
 import Image from "next/image"
 import { generatePDF, downloadPDF } from "@/lib/pdf-generator"
+import { fetchUserById, isSupabaseConfigured } from "@/lib/supabase-client"
+
+// Maps DB payload (user + related tables) to the UserProfile interface used by the UI.
+function mapDbUserToProfile(u: any): UserProfile {
+  const role =
+    u?.role === "admin" ? "admin" :
+    u?.role === "pm"    ? "pm"    :
+    u?.role === "hr"    ? "hr"    :
+    "employee"
+
+  // Map Arkus projects to the UI shape the page expects
+  const arkusProjects = Array.isArray(u?.arkus_projects) ? u.arkus_projects.map((p: any) => ({
+    id: p?.id,
+    project_name: p?.project_name ?? p?.name ?? "Project",
+    client_name: p?.client_name ?? p?.client ?? "Client",
+    description: p?.description ?? "",
+    start_date: p?.start_date ?? u?.created_at ?? new Date().toISOString(),
+    end_date: p?.end_date ?? null,
+    allocation_percentage: p?.allocation_percentage ?? p?.project_allocation_percentage ?? u?.project_allocation_percentage ?? 0,
+    is_current: p?.status ? String(p.status).toLowerCase() === "active" : false,
+    status: p?.status ?? (p?.end_date ? "completed" : "active"),
+    team_size: p?.team_size ?? undefined,
+  })) : []
+
+  // Map certifications (your DB might use "name" instead of "title")
+  const certifications = Array.isArray(u?.certifications) ? u.certifications.map((c: any) => ({
+    id: c?.id,
+    title: c?.title ?? c?.name ?? "",
+    issuer: c?.issuer ?? "",
+    issue_date: c?.issue_date ?? new Date().toISOString(),
+    expiration_date: c?.expiration_date ?? null,
+    credential_url: c?.credential_url ?? null,
+  })) : []
+
+  // Languages as-is (already matches)
+  const languages = Array.isArray(u?.languages) ? u.languages.map((l: any) => ({
+    id: l?.id ?? `${l?.language_name}-${l?.proficiency_level}`,
+    language_name: l?.language_name ?? "",
+    proficiency_level: l?.proficiency_level ?? "",
+  })) : []
+
+  // Technologies: user_technologies -> { level, technologies: { name } }
+  const technologies = Array.isArray(u?.technologies) ? u.technologies.map((t: any) => ({
+    level: t?.level ?? "",
+    technologies: { name: t?.technologies?.name ?? "" },
+  })) : []
+
+  // Skills (if your DB has other names, map here)
+  const skills = Array.isArray(u?.skills) ? u.skills.map((s: any) => ({
+    id: s?.id,
+    skill_name: s?.skill_name ?? s?.name ?? "",
+    level: s?.level ?? "",
+  })) : []
+
+  // Education
+  const education = Array.isArray(u?.education) ? u.education.map((e: any) => ({
+    id: e?.id,
+    degree_title: e?.degree_title ?? e?.degree ?? "",
+    institution_name: e?.institution_name ?? e?.institution ?? "",
+    graduation_date: e?.graduation_date ?? new Date().toISOString(),
+  })) : []
+
+  return {
+    id: u?.id,
+    name: u?.name ?? "",
+    email: u?.email ?? "",
+    role,
+    location: u?.location ?? undefined,
+    english_level: u?.english_level ?? undefined,
+    status: u?.status ?? "available",
+    level: u?.level ?? "",
+    position: u?.position ?? "",
+    company: u?.company ?? "",
+    about: u?.about ?? "",
+    reports_to: u?.reports_to ?? undefined,
+    employee_score: u?.employee_score ?? 0,
+    company_score: u?.company_score ?? 0,
+    current_project_assignment: u?.current_project_assignment ?? undefined,
+    current_project_id: u?.current_project_id ?? undefined,
+    project_allocation_percentage: u?.project_allocation_percentage ?? u?.allocation_percentage ?? 0,
+    created_at: u?.created_at ?? new Date().toISOString(),
+    updated_at: u?.updated_at ?? new Date().toISOString(),
+    profile_image: u?.avatar ?? u?.profile_image ?? undefined,
+    manager: u?.manager ? {
+      id: u.manager.id,
+      name: u.manager.name,
+      email: u.manager.email,
+      position: u.manager.position,
+    } : undefined,
+    arkus_projects: arkusProjects,
+    certifications,
+    languages,
+    technologies,
+    skills,
+    education,
+  }
+}
+
 
 interface Manager {
   id: string
@@ -85,6 +183,7 @@ interface UserProfile {
   project_allocation_percentage?: number
   created_at: string
   updated_at: string
+  profile_image?: string
   manager?: Manager
   arkus_projects: ArkusProject[]
   certifications: Certification[]
@@ -303,15 +402,28 @@ export default function ProfilePage({ params }: { params: { id: string } }) {
   const [isExportingPDF, setIsExportingPDF] = useState(false)
 
   useEffect(() => {
-    // Simulate loading
-    const timer = setTimeout(() => {
-      setUser(mockUserData)
-      setLoading(false)
-    }, 1000)
-
-    return () => clearTimeout(timer)
+    // Load profile from Supabase by route param
+    const load = async () => {
+      try {
+        if (!isSupabaseConfigured()) {
+          console.warn("Supabase not configured; using mock data fallback.")
+ 
+        }
+  
+        const raw = await fetchUserById(params.id)
+        const mapped = mapDbUserToProfile(raw)
+        setUser(mapped)
+      } catch (err) {
+        console.error("Failed to load profile:", err)
+        setError(err instanceof Error ? err.message : "Unknown error")
+      } finally {
+        setLoading(false)
+      }
+    }
+  
+    load()
   }, [params.id])
-
+  
   const handleExportPDF = async () => {
     if (!user) return
     
@@ -437,7 +549,8 @@ export default function ProfilePage({ params }: { params: { id: string } }) {
               <Link href="/analytics" className="text-gray-300 hover:text-white transition-colors">
                 Analytics
               </Link>
-              <Link href="/org-chart" className="text-gray-300 hover:text-white transition-colors">
+              {/* <Link href="/org-chart" className="text-gray-300 hover:text-white transition-colors"> */}
+              <Link href="/org-chart" className="hidden">
                 Org Chart
               </Link>
               <Link href="/import" className="text-gray-300 hover:text-white transition-colors">
@@ -500,8 +613,15 @@ export default function ProfilePage({ params }: { params: { id: string } }) {
                 <CardContent className="p-6">
                   <div className="text-center mb-6">
                     <Avatar className="h-24 w-24 mx-auto mb-4">
-                      <AvatarImage src="/placeholder.svg?height=96&width=96&text=SJ" alt={user.name} />
-                      <AvatarFallback className="bg-red-600 text-white text-xl">
+                    <AvatarImage
+                      src={
+                        (user as any)?.profile_image
+                          ? (user as any).profile_image
+                          : `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=F3F4F6&color=111827&bold=true&length=2&size=96`
+                      }
+                      alt={user.name}
+                    />
+<AvatarFallback className="bg-red-600 text-white text-xl">
                         {getInitials(user.name)}
                       </AvatarFallback>
                     </Avatar>
@@ -736,8 +856,9 @@ export default function ProfilePage({ params }: { params: { id: string } }) {
                                   </div>
                                 </div>
 
-                                <div className="flex flex-wrap items-center gap-2 mb-3">
-                                  {project.is_current && (
+                               {/*  <div className="flex flex-wrap items-center gap-2 mb-3"> */}
+                               <div className="hidden">
+                                 {project.is_current && (
                                     <Badge className="bg-green-100 text-green-800 text-xs">Current</Badge>
                                   )}
                                   <Badge className={`text-xs ${getProjectStatusColor(project.status || 'completed')}`}>
@@ -769,7 +890,8 @@ export default function ProfilePage({ params }: { params: { id: string } }) {
                                   </div>
                                 </div>
 
-                                <div className="flex items-center text-xs text-gray-600 mt-2">
+                                {/* <div className="flex items-center text-xs text-gray-600 mt-2"> */}
+                                <div className="hidden">
                                   <UserCheck className="h-3 w-3 mr-1" />
                                   <span>Click to view project team</span>
                                 </div>
@@ -819,7 +941,8 @@ export default function ProfilePage({ params }: { params: { id: string } }) {
                               href={cert.credential_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-red-600 hover:text-red-700 text-sm flex items-center"
+                              /* className="text-red-600 hover:text-red-700 text-sm flex items-center" */
+                              className=""
                             >
                               View Credential <ExternalLink className="h-3 w-3 ml-1" />
                             </a>

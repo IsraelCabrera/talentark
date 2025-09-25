@@ -63,7 +63,7 @@ export interface RolePermissions {
 // Demo users with proper UUID format and enhanced profile data
 const DEMO_USERS: User[] = [
   {
-    id: "550e8400-e29b-41d4-a716-446655440001",
+    id: "a04e4af2-7acd-43ce-a799-39cf6fd571f0",
     profile_id: "550e8400-e29b-41d4-a716-446655440001",
     name: "Admin User",
     email: "admin@arkus.com",

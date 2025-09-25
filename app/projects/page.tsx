@@ -342,7 +342,8 @@ export default function ProjectsPage() {
               <Link href="/analytics" className="text-gray-300 hover:text-white transition-colors">
                 Analytics
               </Link>
-              <Link href="/org-chart" className="text-gray-300 hover:text-white transition-colors">
+              {/* <Link href="/org-chart" className="text-gray-300 hover:text-white transition-colors"> */}
+              <Link href="/org-chart" className="hidden">
                 Org Chart
               </Link>
               <Link href="/import" className="text-gray-300 hover:text-white transition-colors">
